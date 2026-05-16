@@ -1,0 +1,343 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
+import '../../core/constants/app_tokens.dart';
+import '../../data/models/dream_entry.dart';
+import '../../shared/providers/app_providers.dart';
+import '../../shared/widgets/dream_card.dart';
+import '../../shared/widgets/gradient_button.dart';
+import '../../shared/widgets/section_label.dart';
+
+class WeeklyReportScreen extends ConsumerWidget {
+  const WeeklyReportScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final entries = ref.watch(dreamJournalProvider).valueOrNull ?? const [];
+    final now = DateTime.now();
+    final start = now.subtract(const Duration(days: 6));
+    final range =
+        '${DateFormat('MMM d').format(start)} - ${DateFormat('d, yyyy').format(now)}';
+
+    Future<void> exportReportDreams() async {
+      final file =
+          await ref.read(exportServiceProvider).exportDreamsPdf(entries);
+      try {
+        await ref.read(shareServiceProvider).shareFile(
+              file: file,
+              mimeType: 'application/pdf',
+              chooserTitle: 'Share DreamLog weekly report',
+              text: 'DreamLog weekly report',
+            );
+      } catch (_) {
+        if (!context.mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Report saved: ${file.path}')),
+        );
+      }
+    }
+
+    if (entries.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            onPressed: () => context.pop(),
+            icon: const Icon(Icons.arrow_back),
+          ),
+          title: const Text('Weekly Report'),
+        ),
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: DreamCard(
+              color: DreamColors.surfaceTwo,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.insights_outlined,
+                    color: DreamColors.primaryLight,
+                    size: 58,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No weekly report yet',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Save dreams first so DreamLog can analyze real weekly patterns.',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final report = ref.watch(weeklyReportProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          onPressed: () => context.pop(),
+          icon: const Icon(Icons.arrow_back),
+        ),
+        title: const Text('Weekly Report'),
+        actions: [
+          IconButton(
+            onPressed: exportReportDreams,
+            icon: const Icon(Icons.share_outlined),
+          ),
+        ],
+      ),
+      body: report.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) => Center(child: Text(error.toString())),
+        data: (value) => ListView(
+          padding: const EdgeInsets.fromLTRB(24, 10, 24, 36),
+          children: [
+            Container(
+              height: 124,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [
+                    DreamColors.primary,
+                    DreamColors.aurora,
+                    DreamColors.background
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(24),
+              ),
+              alignment: Alignment.bottomCenter,
+              child: Transform.translate(
+                offset: const Offset(0, 18),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: DreamColors.surface,
+                    borderRadius: BorderRadius.circular(DreamRadii.pill),
+                  ),
+                  child: Text(range),
+                ),
+              ),
+            ),
+            const SizedBox(height: 48),
+            Text(
+              value.dominantTheme,
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineLarge
+                  ?.copyWith(fontSize: 36),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Generated by DreamLog AI - ${entries.length} dreams analyzed',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 26),
+            const SectionLabel('Summary'),
+            const SizedBox(height: 14),
+            Text(
+              value.weekSummary,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontSize: 18,
+                    height: 1.78,
+                  ),
+            ),
+            const SizedBox(height: 26),
+            DreamCard(
+              color: DreamColors.surface,
+              padding: EdgeInsets.zero,
+              child: IntrinsicHeight(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 6,
+                      decoration: const BoxDecoration(
+                        color: DreamColors.gold,
+                        borderRadius: BorderRadius.only(
+                          topLeft: Radius.circular(DreamRadii.lg),
+                          bottomLeft: Radius.circular(DreamRadii.lg),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(18),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SectionLabel('Dominant Theme'),
+                            const SizedBox(height: 10),
+                            Text(
+                              value.dominantTheme,
+                              style: Theme.of(context).textTheme.headlineMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 26),
+            const SectionLabel('Emotional Journey'),
+            const SizedBox(height: 14),
+            _Timeline(text: value.emotionalJourney, entries: entries),
+            const SizedBox(height: 26),
+            const SectionLabel('Recurring Symbols'),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                if (value.recurringSymbols.isEmpty)
+                  Expanded(
+                    child: DreamCard(
+                      color: DreamColors.surfaceTwo,
+                      child: Text(
+                        'No recurring symbols detected yet.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  )
+                else
+                  for (final symbol in value.recurringSymbols.take(3))
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 10),
+                        child: DreamCard(
+                          color: DreamColors.surfaceTwo,
+                          child: Column(
+                            children: [
+                              const Icon(
+                                Icons.auto_awesome,
+                                color: DreamColors.primaryLight,
+                              ),
+                              const SizedBox(height: 10),
+                              Text(symbol, textAlign: TextAlign.center),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+              ],
+            ),
+            const SizedBox(height: 26),
+            DreamCard(
+              gradient: DreamGradients.card,
+              child: Stack(
+                children: [
+                  Text(
+                    '"',
+                    style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                          color: DreamColors.primary.withValues(alpha: 0.34),
+                          fontSize: 82,
+                        ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 34),
+                    child: Text(
+                      value.insight,
+                      style:
+                          Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontSize: 18,
+                                height: 1.75,
+                              ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+            DreamCard(
+              gradient: DreamGradients.primary,
+              child: Text(
+                value.affirmation,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontSize: 22,
+                    ),
+              ),
+            ),
+            const SizedBox(height: 26),
+            GradientButton(
+                label: 'Share Report', onPressed: exportReportDreams),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: exportReportDreams,
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(54),
+                side: const BorderSide(color: DreamColors.primaryLight),
+              ),
+              child: const Text('Save as PDF'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Timeline extends StatelessWidget {
+  const _Timeline({required this.text, required this.entries});
+
+  final String text;
+  final List<DreamEntry> entries;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = entries.take(7).toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    return DreamCard(
+      color: DreamColors.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(text, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 18),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 42,
+                    child: Text(DateFormat.E().format(row.createdAt)),
+                  ),
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: emotionColor(row.primaryEmotion),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(child: Text(row.primaryEmotion)),
+                  Text(
+                    row.symbols.isEmpty ? 'No symbol' : row.symbols.first,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontStyle: FontStyle.italic,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
