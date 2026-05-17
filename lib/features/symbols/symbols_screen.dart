@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/constants/app_tokens.dart';
+import '../../data/models/dream_symbol_catalog.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/dream_card.dart';
 import '../../shared/widgets/section_label.dart';
@@ -25,7 +26,7 @@ class SymbolsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'Recurring dream symbols and their psychological meanings.',
+              'Recurring dream symbols from a curated ${dreamSymbolCatalog.length}-symbol taxonomy.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 32),

@@ -1,10 +1,16 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/constants/app_tokens.dart';
 import '../../data/models/dream_entry.dart';
+import '../../data/models/weekly_report.dart';
+import '../../data/services/export_service.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/dream_card.dart';
 import '../../shared/widgets/gradient_button.dart';
@@ -20,26 +26,6 @@ class WeeklyReportScreen extends ConsumerWidget {
     final start = now.subtract(const Duration(days: 6));
     final range =
         '${DateFormat('MMM d').format(start)} - ${DateFormat('d, yyyy').format(now)}';
-
-    Future<void> exportReportDreams() async {
-      final file =
-          await ref.read(exportServiceProvider).exportDreamsPdf(entries);
-      try {
-        await ref.read(shareServiceProvider).shareFile(
-              file: file,
-              mimeType: 'application/pdf',
-              chooserTitle: 'Share DreamLog weekly report',
-              text: 'DreamLog weekly report',
-            );
-      } catch (_) {
-        if (!context.mounted) {
-          return;
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Report saved: ${file.path}')),
-        );
-      }
-    }
 
     if (entries.isEmpty) {
       return Scaffold(
@@ -84,6 +70,7 @@ class WeeklyReportScreen extends ConsumerWidget {
     }
 
     final report = ref.watch(weeklyReportProvider);
+    final reportValue = report.valueOrNull;
 
     return Scaffold(
       appBar: AppBar(
@@ -94,7 +81,15 @@ class WeeklyReportScreen extends ConsumerWidget {
         title: const Text('Weekly Report'),
         actions: [
           IconButton(
-            onPressed: exportReportDreams,
+            onPressed: reportValue == null
+                ? null
+                : () => _showWeeklyShareOptions(
+                      context,
+                      ref,
+                      report: reportValue,
+                      entries: entries,
+                      range: range,
+                    ),
             icon: const Icon(Icons.share_outlined),
           ),
         ],
@@ -273,10 +268,24 @@ class WeeklyReportScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 26),
             GradientButton(
-                label: 'Share Report', onPressed: exportReportDreams),
+              label: 'Share Report',
+              onPressed: () => _showWeeklyShareOptions(
+                context,
+                ref,
+                report: value,
+                entries: entries,
+                range: range,
+              ),
+            ),
             const SizedBox(height: 12),
             OutlinedButton(
-              onPressed: exportReportDreams,
+              onPressed: () => _shareWeeklyReportPdf(
+                context,
+                ref,
+                report: value,
+                entries: entries,
+                range: range,
+              ),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(54),
                 side: const BorderSide(color: DreamColors.primaryLight),
@@ -288,6 +297,223 @@ class WeeklyReportScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+Future<void> _showWeeklyShareOptions(
+  BuildContext context,
+  WidgetRef ref, {
+  required WeeklyReport report,
+  required List<DreamEntry> entries,
+  required String range,
+}) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: DreamColors.surfaceTwo,
+    builder: (sheetContext) {
+      void closeAndRun(Future<void> Function() action) {
+        Navigator.of(sheetContext).pop();
+        unawaited(
+          Future<void>.delayed(const Duration(milliseconds: 180), () async {
+            if (!context.mounted) {
+              return;
+            }
+            await action();
+          }),
+        );
+      }
+
+      return SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: DreamColors.borderMuted,
+                  borderRadius: BorderRadius.circular(DreamRadii.pill),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.auto_awesome_motion_outlined),
+                title: const Text('Share Weekly Story'),
+                subtitle: const Text(
+                    '4 slides, 9:16 PNG for stories and social apps'),
+                onTap: () => closeAndRun(
+                  () => _shareWeeklyReportImage(
+                    context,
+                    ref,
+                    report: report,
+                    entries: entries,
+                    range: range,
+                    format: DreamShareFormat.story,
+                    chooserTitle: 'Share DreamLog weekly story',
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.grid_view_outlined),
+                title: const Text('Share Weekly Card'),
+                subtitle: const Text('4 slides, 4:5 PNG for feeds and posts'),
+                onTap: () => closeAndRun(
+                  () => _shareWeeklyReportImage(
+                    context,
+                    ref,
+                    report: report,
+                    entries: entries,
+                    range: range,
+                    format: DreamShareFormat.socialCard,
+                    chooserTitle: 'Share DreamLog weekly card',
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.picture_as_pdf_outlined),
+                title: const Text('Save as PDF'),
+                subtitle: const Text('Weekly summary, insight, and symbols'),
+                onTap: () => closeAndRun(
+                  () => _shareWeeklyReportPdf(
+                    context,
+                    ref,
+                    report: report,
+                    entries: entries,
+                    range: range,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _shareWeeklyReportImage(
+  BuildContext context,
+  WidgetRef ref, {
+  required WeeklyReport report,
+  required List<DreamEntry> entries,
+  required String range,
+  required DreamShareFormat format,
+  required String chooserTitle,
+}) async {
+  _showWeeklyShareSnackBar(
+    context,
+    'Preparing 4 weekly slides...',
+    duration: const Duration(seconds: 30),
+  );
+
+  List<File> files = const [];
+  try {
+    files = await ref
+        .read(exportServiceProvider)
+        .createWeeklyReportShareImages(
+          report: report,
+          entries: entries,
+          range: range,
+          format: format,
+        )
+        .timeout(const Duration(seconds: 20));
+    await ref
+        .read(shareServiceProvider)
+        .shareFiles(
+          files: files,
+          mimeType: 'image/png',
+          chooserTitle: chooserTitle,
+          text: '${report.dominantTheme} - 4-slide weekly report from DreamLog',
+        )
+        .timeout(const Duration(seconds: 12));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    }
+  } catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    final savedPath =
+        files.isEmpty ? '' : '\nSaved first slide: ${files.first.path}';
+    _showWeeklyShareSnackBar(
+      context,
+      'Share weekly slides failed: ${_weeklyShareErrorMessage(error)}$savedPath',
+    );
+  }
+}
+
+Future<void> _shareWeeklyReportPdf(
+  BuildContext context,
+  WidgetRef ref, {
+  required WeeklyReport report,
+  required List<DreamEntry> entries,
+  required String range,
+}) async {
+  _showWeeklyShareSnackBar(
+    context,
+    'Preparing weekly PDF...',
+    duration: const Duration(seconds: 30),
+  );
+
+  File? file;
+  try {
+    file = await ref
+        .read(exportServiceProvider)
+        .exportWeeklyReportPdf(
+          report: report,
+          entries: entries,
+          range: range,
+        )
+        .timeout(const Duration(seconds: 20));
+    await ref
+        .read(shareServiceProvider)
+        .shareFile(
+          file: file,
+          mimeType: 'application/pdf',
+          chooserTitle: 'Share DreamLog weekly PDF',
+          text: '${report.dominantTheme} - weekly report from DreamLog',
+        )
+        .timeout(const Duration(seconds: 12));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    }
+  } catch (error) {
+    if (!context.mounted) {
+      return;
+    }
+    final savedPath = file == null ? '' : '\nSaved PDF: ${file.path}';
+    _showWeeklyShareSnackBar(
+      context,
+      'Share weekly PDF failed: ${_weeklyShareErrorMessage(error)}$savedPath',
+    );
+  }
+}
+
+void _showWeeklyShareSnackBar(
+  BuildContext context,
+  String message, {
+  Duration duration = const Duration(seconds: 6),
+}) {
+  final messenger = ScaffoldMessenger.of(context);
+  messenger.hideCurrentSnackBar();
+  messenger.showSnackBar(
+    SnackBar(
+      content: Text(message),
+      duration: duration,
+    ),
+  );
+}
+
+String _weeklyShareErrorMessage(Object error) {
+  if (error is TimeoutException) {
+    return 'Share sheet took too long to respond.';
+  }
+  if (error is PlatformException) {
+    return error.message ?? error.code;
+  }
+  final message = error.toString().replaceFirst('Exception: ', '');
+  return message.isEmpty ? 'Unknown error.' : message;
 }
 
 class _Timeline extends StatelessWidget {
@@ -326,12 +552,26 @@ class _Timeline extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 14),
-                  Expanded(child: Text(row.primaryEmotion)),
-                  Text(
-                    row.symbols.isEmpty ? 'No symbol' : row.symbols.first,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontStyle: FontStyle.italic,
-                        ),
+                  Expanded(
+                    flex: 2,
+                    child: Text(
+                      row.primaryEmotion,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 3,
+                    child: Text(
+                      row.symbols.isEmpty ? 'No symbol' : row.symbols.first,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.end,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontStyle: FontStyle.italic,
+                          ),
+                    ),
                   ),
                 ],
               ),

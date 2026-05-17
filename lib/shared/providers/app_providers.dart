@@ -4,6 +4,7 @@ import '../../data/models/app_settings.dart';
 import '../../data/models/dream_entry.dart';
 import '../../data/models/dream_interpretation.dart';
 import '../../data/models/dream_symbol.dart';
+import '../../data/models/dream_symbol_catalog.dart';
 import '../../data/models/user_profile.dart';
 import '../../data/models/weekly_report.dart';
 import '../../data/repositories/app_preferences_repository.dart';
@@ -89,7 +90,8 @@ final symbolsProvider = Provider<List<DreamSymbol>>((ref) {
   final counts = <String, int>{};
   for (final entry in entries) {
     for (final symbol in entry.symbols) {
-      counts.update(symbol, (value) => value + 1, ifAbsent: () => 1);
+      final canonical = canonicalDreamSymbol(symbol)?.name ?? symbol;
+      counts.update(canonical, (value) => value + 1, ifAbsent: () => 1);
     }
   }
 
@@ -97,8 +99,8 @@ final symbolsProvider = Provider<List<DreamSymbol>>((ref) {
       .map(
         (entry) => DreamSymbol(
           name: entry.key,
-          icon: _symbolIcon(entry.key),
-          meaning: _symbolMeaning(entry.key),
+          icon: dreamSymbolIcon(entry.key),
+          meaning: dreamSymbolMeaning(entry.key),
           frequency: entry.value,
         ),
       )
@@ -285,43 +287,6 @@ class AppSettingsController extends StateNotifier<AsyncValue<AppSettings>> {
     await _repository.saveSettings(updated);
     state = AsyncData(updated);
   }
-}
-
-String _symbolIcon(String symbol) {
-  final normalized = symbol.toLowerCase();
-  if (normalized.contains('ocean') || normalized.contains('water')) {
-    return 'water';
-  }
-  if (normalized.contains('moon')) {
-    return 'moon';
-  }
-  if (normalized.contains('clock')) {
-    return 'clock';
-  }
-  if (normalized.contains('door')) {
-    return 'door';
-  }
-  if (normalized.contains('city')) {
-    return 'city';
-  }
-  return 'key';
-}
-
-String _symbolMeaning(String symbol) {
-  final normalized = symbol.toLowerCase();
-  if (normalized.contains('ocean') || normalized.contains('water')) {
-    return 'Emotional depth, surrender, memory, and the subconscious mind.';
-  }
-  if (normalized.contains('door')) {
-    return 'A threshold, possible change, or choice that is not fully opened yet.';
-  }
-  if (normalized.contains('clock')) {
-    return 'Pressure, timing, old expectations, or a changed relationship to urgency.';
-  }
-  if (normalized.contains('moon')) {
-    return 'Intuition, hidden cycles, and feelings that become visible gradually.';
-  }
-  return 'Opportunity, hidden access, secrets, and new beginnings.';
 }
 
 extension FirstOrNullExtension<T> on Iterable<T> {

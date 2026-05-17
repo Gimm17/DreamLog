@@ -146,42 +146,67 @@ class AIResultScreen extends ConsumerWidget {
               ],
             ),
             Positioned(
-              left: 24,
-              right: 24,
-              bottom: 20,
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => context.pop(),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: DreamColors.primaryLight),
-                        minimumSize: const Size.fromHeight(54),
+              left: 16,
+              right: 16,
+              bottom: 16,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: DreamColors.surfaceTwo.withValues(alpha: 0.96),
+                  border: Border.all(
+                    color: DreamColors.borderMuted.withValues(alpha: 0.80),
+                  ),
+                  borderRadius: BorderRadius.circular(32),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.38),
+                      blurRadius: 28,
+                      offset: const Offset(0, 14),
+                    ),
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => context.pop(),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: DreamColors.textPrimary,
+                            backgroundColor:
+                                DreamColors.background.withValues(alpha: 0.72),
+                            side: const BorderSide(
+                              color: DreamColors.primaryLight,
+                              width: 1.2,
+                            ),
+                            minimumSize: const Size.fromHeight(54),
+                          ),
+                          child: const Text('Back to Edit'),
+                        ),
                       ),
-                      child: const Text('Back to Edit'),
-                    ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GradientButton(
+                          label: 'Save Dream',
+                          fullWidth: true,
+                          onPressed: () async {
+                            await ref
+                                .read(dreamJournalProvider.notifier)
+                                .addInterpretedDream(
+                                  content: resolvedDraft.content,
+                                  date: resolvedDraft.date,
+                                  clarity: resolvedDraft.clarity,
+                                  interpretation: resolvedDraft.interpretation,
+                                );
+                            if (context.mounted) {
+                              context.go('/journal');
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: GradientButton(
-                      label: 'Save Dream',
-                      fullWidth: true,
-                      onPressed: () async {
-                        await ref
-                            .read(dreamJournalProvider.notifier)
-                            .addInterpretedDream(
-                              content: resolvedDraft.content,
-                              date: resolvedDraft.date,
-                              clarity: resolvedDraft.clarity,
-                              interpretation: resolvedDraft.interpretation,
-                            );
-                        if (context.mounted) {
-                          context.go('/journal');
-                        }
-                      },
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],

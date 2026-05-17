@@ -11,11 +11,20 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../core/constants/app_tokens.dart';
 import '../models/app_settings.dart';
 import '../models/dream_entry.dart';
+import '../models/dream_symbol_catalog.dart';
 import '../models/user_profile.dart';
+import '../models/weekly_report.dart';
 
 enum DreamShareFormat {
   socialCard,
   story,
+}
+
+enum _WeeklyShareSlide {
+  overview,
+  symbols,
+  summary,
+  journey,
 }
 
 class ExportService {
@@ -58,7 +67,7 @@ class ExportService {
       ),
     );
 
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = await _shareOutputDirectory();
     final file = File('${dir.path}/${entry.id}.pdf');
     await file.writeAsBytes(await document.save());
     return file;
@@ -122,6 +131,84 @@ class ExportService {
     return file;
   }
 
+  Future<File> exportWeeklyReportPdf({
+    required WeeklyReport report,
+    required List<DreamEntry> entries,
+    required String range,
+  }) async {
+    final document = pw.Document();
+
+    document.addPage(
+      pw.Page(
+        build: (context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'DreamLog Weekly Report',
+                style: pw.TextStyle(
+                  fontSize: 28,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text(range),
+              pw.Text('${entries.length} dreams analyzed'),
+              pw.SizedBox(height: 24),
+              pw.Text(
+                report.dominantTheme,
+                style: pw.TextStyle(
+                  fontSize: 22,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 18),
+              pw.Text(
+                'Summary',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(report.weekSummary),
+              pw.SizedBox(height: 18),
+              pw.Text(
+                'Emotional Journey',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(report.emotionalJourney),
+              pw.SizedBox(height: 18),
+              pw.Text(
+                'Recurring Symbols',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(
+                report.recurringSymbols.isEmpty
+                    ? 'No recurring symbols detected yet.'
+                    : report.recurringSymbols.join(', '),
+              ),
+              pw.SizedBox(height: 18),
+              pw.Text(
+                'Insight',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(report.insight),
+              pw.SizedBox(height: 18),
+              pw.Text(
+                'Affirmation',
+                style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Text(report.affirmation),
+            ],
+          );
+        },
+      ),
+    );
+
+    final dir = await _shareOutputDirectory();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final file = File('${dir.path}/dreamlog-weekly-report-$stamp.pdf');
+    await file.writeAsBytes(await document.save());
+    return file;
+  }
+
   Future<File> exportDreamsJson(List<DreamEntry> entries) async {
     final dir = await getApplicationDocumentsDirectory();
     final stamp = DateTime.now().millisecondsSinceEpoch;
@@ -138,7 +225,7 @@ class ExportService {
     required UserProfile profile,
     required AppSettings settings,
   }) async {
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = await _shareOutputDirectory();
     final stamp = DateTime.now().millisecondsSinceEpoch;
     final file = File('${dir.path}/dreamlog-backup-$stamp.json');
     final profileJson = Map<String, dynamic>.from(profile.toJson())
@@ -183,6 +270,14 @@ class ExportService {
     };
   }
 
+  Future<Directory> _shareOutputDirectory() async {
+    final externalCacheDirs = await getExternalCacheDirectories();
+    if (externalCacheDirs?.isNotEmpty == true) {
+      return externalCacheDirs!.first;
+    }
+    return getTemporaryDirectory();
+  }
+
   Future<File> shareDreamPdf(DreamEntry entry) async {
     return exportDreamPdf(entry);
   }
@@ -212,6 +307,71 @@ class ExportService {
     }
 
     return _createDreamShareImageWithFlutterCanvas(entry, format: format);
+  }
+
+  Future<File> createWeeklyReportShareImage({
+    required WeeklyReport report,
+    required List<DreamEntry> entries,
+    required String range,
+    required DreamShareFormat format,
+  }) async {
+    final files = await createWeeklyReportShareImages(
+      report: report,
+      entries: entries,
+      range: range,
+      format: format,
+    );
+    return files.first;
+  }
+
+  Future<List<File>> createWeeklyReportShareImages({
+    required WeeklyReport report,
+    required List<DreamEntry> entries,
+    required String range,
+    required DreamShareFormat format,
+  }) async {
+    final size = switch (format) {
+      DreamShareFormat.socialCard => const Size(900, 1125),
+      DreamShareFormat.story => const Size(720, 1280),
+    };
+    final dir = await _shareOutputDirectory();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final files = <File>[];
+
+    for (final slide in _WeeklyShareSlide.values) {
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(
+        recorder,
+        Rect.fromLTWH(0, 0, size.width, size.height),
+      );
+
+      _drawWeeklyShareBackground(canvas, size);
+      _drawWeeklyShareContent(
+        canvas,
+        size,
+        report: report,
+        entries: entries,
+        range: range,
+        format: format,
+        slide: slide,
+      );
+
+      final picture = recorder.endRecording();
+      final image =
+          await picture.toImage(size.width.toInt(), size.height.toInt());
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (bytes == null) {
+        throw StateError('Could not render weekly share image.');
+      }
+
+      final file = File(
+        '${dir.path}/dreamlog-weekly-${format.name}-${slide.name}-$stamp.png',
+      );
+      await file.writeAsBytes(bytes.buffer.asUint8List());
+      files.add(file);
+    }
+
+    return files;
   }
 
   Future<File> _createDreamShareImageWithFlutterCanvas(
@@ -284,6 +444,61 @@ class ExportService {
       final y = ((index * 277) % size.height.toInt()).toDouble();
       final radius = 1.4 + (index % 4) * 0.55;
       canvas.drawCircle(Offset(x, y), radius, starPaint);
+    }
+  }
+
+  void _drawWeeklyShareBackground(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..shader = ui.Gradient.linear(
+          Offset.zero,
+          Offset(size.width, size.height),
+          const [
+            Color(0xFF080710),
+            Color(0xFF191532),
+            Color(0xFF08332B),
+          ],
+          const [0, 0.58, 1],
+        ),
+    );
+
+    canvas.drawCircle(
+      Offset(size.width * 0.76, size.height * 0.13),
+      size.width * 0.25,
+      Paint()..color = DreamColors.aurora.withValues(alpha: 0.20),
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.78, size.height * 0.13),
+      size.width * 0.19,
+      Paint()..color = const Color(0xFF080710).withValues(alpha: 0.72),
+    );
+    canvas.drawCircle(
+      Offset(size.width * 0.14, size.height * 0.48),
+      size.width * 0.34,
+      Paint()..color = DreamColors.primaryLight.withValues(alpha: 0.12),
+    );
+
+    final starPaint = Paint()
+      ..color = DreamColors.textPrimary.withValues(alpha: 0.42);
+    for (var index = 0; index < 64; index++) {
+      final x = ((index * 157) % size.width.toInt()).toDouble();
+      final y = ((index * 241) % size.height.toInt()).toDouble();
+      final radius = 1.0 + (index % 5) * 0.42;
+      canvas.drawCircle(Offset(x, y), radius, starPaint);
+    }
+
+    final linePaint = Paint()
+      ..color = DreamColors.aurora.withValues(alpha: 0.16)
+      ..strokeWidth = 2;
+    for (var index = 0; index < 5; index++) {
+      final y = size.height * (0.28 + index * 0.08);
+      canvas.drawLine(
+        Offset(size.width * 0.10, y),
+        Offset(size.width * 0.90, y + 26),
+        linePaint,
+      );
     }
   }
 
@@ -435,6 +650,617 @@ class ExportService {
     );
   }
 
+  void _drawWeeklyShareContent(
+    Canvas canvas,
+    Size size, {
+    required WeeklyReport report,
+    required List<DreamEntry> entries,
+    required String range,
+    required DreamShareFormat format,
+    required _WeeklyShareSlide slide,
+  }) {
+    final isStory = format == DreamShareFormat.story;
+    final margin = isStory ? 56.0 : 64.0;
+    final maxWidth = size.width - (margin * 2);
+    final footerY = size.height - (isStory ? 118.0 : 104.0);
+    final slideIndex = _WeeklyShareSlide.values.indexOf(slide) + 1;
+
+    _drawWeeklyHeader(
+      canvas,
+      size,
+      margin: margin,
+      maxWidth: maxWidth,
+      range: range,
+      slideText: '$slideIndex / 4',
+    );
+
+    switch (slide) {
+      case _WeeklyShareSlide.overview:
+        _drawWeeklyOverviewSlide(
+          canvas,
+          size,
+          report: report,
+          entries: entries,
+          margin: margin,
+          maxWidth: maxWidth,
+          isStory: isStory,
+        );
+      case _WeeklyShareSlide.symbols:
+        _drawWeeklySymbolsSlide(
+          canvas,
+          size,
+          report: report,
+          margin: margin,
+          maxWidth: maxWidth,
+          isStory: isStory,
+        );
+      case _WeeklyShareSlide.summary:
+        _drawWeeklyTextSlide(
+          canvas,
+          size,
+          title: 'Week Summary',
+          body: report.weekSummary,
+          caption: 'Full text',
+          margin: margin,
+          maxWidth: maxWidth,
+          isStory: isStory,
+        );
+      case _WeeklyShareSlide.journey:
+        _drawWeeklyJourneySlide(
+          canvas,
+          size,
+          report: report,
+          margin: margin,
+          maxWidth: maxWidth,
+          isStory: isStory,
+        );
+    }
+
+    _drawWeeklyFooter(
+      canvas,
+      size,
+      margin: margin,
+      maxWidth: maxWidth,
+      footerY: footerY,
+    );
+  }
+
+  void _drawWeeklyHeader(
+    Canvas canvas,
+    Size size, {
+    required double margin,
+    required double maxWidth,
+    required String range,
+    required String slideText,
+  }) {
+    _paintText(
+      canvas,
+      'DreamLog Weekly',
+      Offset(margin, 68),
+      maxWidth: maxWidth * 0.66,
+      style: const TextStyle(
+        color: DreamColors.aurora,
+        fontSize: 27,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0,
+      ),
+    );
+    _paintText(
+      canvas,
+      slideText,
+      Offset(size.width - margin - 96, 72),
+      maxWidth: 96,
+      maxLines: 1,
+      style: const TextStyle(
+        color: DreamColors.textSecondary,
+        fontSize: 22,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0,
+      ),
+    );
+
+    _paintText(
+      canvas,
+      range,
+      Offset(margin, 106),
+      maxWidth: maxWidth,
+      style: const TextStyle(
+        color: DreamColors.textSecondary,
+        fontSize: 22,
+        letterSpacing: 0,
+      ),
+    );
+  }
+
+  void _drawWeeklyOverviewSlide(
+    Canvas canvas,
+    Size size, {
+    required WeeklyReport report,
+    required List<DreamEntry> entries,
+    required double margin,
+    required double maxWidth,
+    required bool isStory,
+  }) {
+    final titleTop = isStory ? 174.0 : 150.0;
+    final statsTop = isStory ? 370.0 : 306.0;
+    final summaryTop = isStory ? 496.0 : 420.0;
+    final insightTop = isStory ? 812.0 : 704.0;
+
+    _paintText(
+      canvas,
+      report.dominantTheme,
+      Offset(margin, titleTop),
+      maxWidth: maxWidth,
+      maxLines: isStory ? 3 : 2,
+      style: TextStyle(
+        color: DreamColors.textPrimary,
+        fontSize: isStory ? 42 : 43,
+        fontWeight: FontWeight.w900,
+        height: 1.06,
+        letterSpacing: 0,
+      ),
+    );
+
+    final topEmotion = _topEmotion(entries);
+    final symbolCount =
+        entries.fold<int>(0, (total, entry) => total + entry.symbols.length);
+    final statWidth = (maxWidth - 22) / 3;
+    _drawStatTile(
+      canvas,
+      Offset(margin, statsTop),
+      statWidth,
+      '${entries.length}',
+      'dreams',
+      DreamColors.primaryLight,
+    );
+    _drawStatTile(
+      canvas,
+      Offset(margin + statWidth + 11, statsTop),
+      statWidth,
+      '$symbolCount',
+      'symbols',
+      DreamColors.aurora,
+    );
+    _drawStatTile(
+      canvas,
+      Offset(margin + (statWidth + 11) * 2, statsTop),
+      statWidth,
+      topEmotion,
+      'top mood',
+      emotionColor(topEmotion),
+    );
+
+    _drawWeeklyPanel(
+      canvas,
+      Offset(margin, summaryTop),
+      Size(maxWidth, isStory ? 272 : 236),
+      label: 'WEEK SUMMARY',
+      body: report.weekSummary,
+      maxLines: isStory ? 4 : 3,
+      bodyFontSize: isStory ? 30 : 29,
+    );
+
+    _drawWeeklyPanel(
+      canvas,
+      Offset(margin, insightTop),
+      Size(maxWidth, isStory ? 178 : 148),
+      label: 'KEY INSIGHT',
+      body: report.insight,
+      maxLines: isStory ? 3 : 2,
+      bodyFontSize: isStory ? 28 : 27,
+    );
+  }
+
+  void _drawWeeklySymbolsSlide(
+    Canvas canvas,
+    Size size, {
+    required WeeklyReport report,
+    required double margin,
+    required double maxWidth,
+    required bool isStory,
+  }) {
+    _paintText(
+      canvas,
+      'Recurring Symbols',
+      Offset(margin, isStory ? 170 : 150),
+      maxWidth: maxWidth,
+      maxLines: 2,
+      style: TextStyle(
+        color: DreamColors.textPrimary,
+        fontSize: isStory ? 48 : 48,
+        fontWeight: FontWeight.w900,
+        height: 1.05,
+        letterSpacing: 0,
+      ),
+    );
+    _paintText(
+      canvas,
+      'Simbol yang paling sering muncul minggu ini.',
+      Offset(margin, isStory ? 280 : 242),
+      maxWidth: maxWidth,
+      maxLines: 2,
+      style: const TextStyle(
+        color: DreamColors.textSecondary,
+        fontSize: 25,
+        height: 1.2,
+        letterSpacing: 0,
+      ),
+    );
+
+    final symbols = report.recurringSymbols.isEmpty
+        ? const ['No recurring symbols detected yet.']
+        : report.recurringSymbols.take(4).toList();
+    final rowHeight = isStory ? 158.0 : 142.0;
+    var y = isStory ? 370.0 : 326.0;
+    for (var index = 0; index < symbols.length; index++) {
+      _drawSymbolPanel(
+        canvas,
+        Offset(margin, y),
+        Size(maxWidth, rowHeight),
+        symbols[index],
+        index + 1,
+      );
+      y += rowHeight + 18;
+    }
+  }
+
+  void _drawWeeklyTextSlide(
+    Canvas canvas,
+    Size size, {
+    required String title,
+    required String body,
+    required String caption,
+    required double margin,
+    required double maxWidth,
+    required bool isStory,
+  }) {
+    _paintText(
+      canvas,
+      title,
+      Offset(margin, isStory ? 176 : 152),
+      maxWidth: maxWidth,
+      maxLines: 2,
+      style: TextStyle(
+        color: DreamColors.textPrimary,
+        fontSize: isStory ? 52 : 52,
+        fontWeight: FontWeight.w900,
+        height: 1.04,
+        letterSpacing: 0,
+      ),
+    );
+    _paintText(
+      canvas,
+      caption,
+      Offset(margin, isStory ? 292 : 258),
+      maxWidth: maxWidth,
+      maxLines: 1,
+      style: const TextStyle(
+        color: DreamColors.aurora,
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0,
+      ),
+    );
+    _drawWeeklyPanel(
+      canvas,
+      Offset(margin, isStory ? 350 : 316),
+      Size(maxWidth, isStory ? 728 : 622),
+      label: 'DETAIL',
+      body: body,
+      maxLines: isStory ? 14 : 10,
+      bodyFontSize: isStory ? 30 : 30,
+    );
+  }
+
+  void _drawWeeklyJourneySlide(
+    Canvas canvas,
+    Size size, {
+    required WeeklyReport report,
+    required double margin,
+    required double maxWidth,
+    required bool isStory,
+  }) {
+    _paintText(
+      canvas,
+      'Journey & Insight',
+      Offset(margin, isStory ? 176 : 152),
+      maxWidth: maxWidth,
+      maxLines: 2,
+      style: TextStyle(
+        color: DreamColors.textPrimary,
+        fontSize: isStory ? 52 : 52,
+        fontWeight: FontWeight.w900,
+        height: 1.04,
+        letterSpacing: 0,
+      ),
+    );
+    _drawWeeklyPanel(
+      canvas,
+      Offset(margin, isStory ? 310 : 286),
+      Size(maxWidth, isStory ? 330 : 272),
+      label: 'EMOTIONAL JOURNEY',
+      body: report.emotionalJourney,
+      maxLines: isStory ? 6 : 4,
+      bodyFontSize: isStory ? 28 : 28,
+    );
+    _drawWeeklyPanel(
+      canvas,
+      Offset(margin, isStory ? 678 : 592),
+      Size(maxWidth, isStory ? 268 : 224),
+      label: 'AI INSIGHT',
+      body: report.insight,
+      maxLines: isStory ? 5 : 4,
+      bodyFontSize: isStory ? 28 : 28,
+    );
+    _drawConstrainedPill(
+      canvas,
+      Offset(margin, isStory ? 986 : 856),
+      report.affirmation,
+      maxWidth: maxWidth,
+      color: DreamColors.aurora.withValues(alpha: 0.16),
+      textColor: DreamColors.textPrimary,
+    );
+  }
+
+  void _drawWeeklyFooter(
+    Canvas canvas,
+    Size size, {
+    required double margin,
+    required double maxWidth,
+    required double footerY,
+  }) {
+    canvas.drawLine(
+      Offset(margin, footerY - 28),
+      Offset(size.width - margin, footerY - 28),
+      Paint()
+        ..color = DreamColors.textPrimary.withValues(alpha: 0.16)
+        ..strokeWidth = 2,
+    );
+    _paintText(
+      canvas,
+      'Shared from DreamLog',
+      Offset(margin, footerY),
+      maxWidth: maxWidth,
+      style: const TextStyle(
+        color: DreamColors.textPrimary,
+        fontSize: 28,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0,
+      ),
+    );
+    _paintText(
+      canvas,
+      'AI dream journal and weekly pattern map',
+      Offset(margin, footerY + 40),
+      maxWidth: maxWidth,
+      style: const TextStyle(
+        color: DreamColors.textSecondary,
+        fontSize: 23,
+        letterSpacing: 0,
+      ),
+    );
+  }
+
+  void _drawStatTile(
+    Canvas canvas,
+    Offset offset,
+    double width,
+    String value,
+    String label,
+    Color accent,
+  ) {
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(offset.dx, offset.dy, width, 86),
+      const Radius.circular(22),
+    );
+    canvas.drawRRect(
+      rect,
+      Paint()..color = DreamColors.surfaceTwo.withValues(alpha: 0.76),
+    );
+    canvas.drawCircle(
+      Offset(offset.dx + width - 24, offset.dy + 22),
+      18,
+      Paint()..color = accent.withValues(alpha: 0.28),
+    );
+    _paintText(
+      canvas,
+      value,
+      Offset(offset.dx + 18, offset.dy + 15),
+      maxWidth: width - 36,
+      maxLines: 1,
+      style: const TextStyle(
+        color: DreamColors.textPrimary,
+        fontSize: 28,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 0,
+      ),
+    );
+    _paintText(
+      canvas,
+      label,
+      Offset(offset.dx + 18, offset.dy + 52),
+      maxWidth: width - 36,
+      maxLines: 1,
+      style: const TextStyle(
+        color: DreamColors.textSecondary,
+        fontSize: 17,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0,
+      ),
+    );
+  }
+
+  double _drawWeeklyPanel(
+    Canvas canvas,
+    Offset offset,
+    Size size, {
+    required String label,
+    required String body,
+    required int maxLines,
+    required double bodyFontSize,
+  }) {
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(offset.dx, offset.dy, size.width, size.height),
+      const Radius.circular(28),
+    );
+    canvas.drawRRect(
+      rect,
+      Paint()..color = DreamColors.surface.withValues(alpha: 0.74),
+    );
+    canvas.drawRRect(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = DreamColors.aurora.withValues(alpha: 0.18),
+    );
+    canvas.save();
+    canvas.clipRRect(rect);
+    _paintText(
+      canvas,
+      label,
+      Offset(offset.dx + 26, offset.dy + 26),
+      maxWidth: size.width - 52,
+      style: const TextStyle(
+        color: DreamColors.aurora,
+        fontSize: 20,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 0,
+      ),
+    );
+    _paintText(
+      canvas,
+      body.trim(),
+      Offset(offset.dx + 26, offset.dy + 68),
+      maxWidth: size.width - 52,
+      maxLines: maxLines,
+      style: const TextStyle(
+        color: DreamColors.textPrimary,
+        fontSize: 1,
+        height: 1.28,
+        letterSpacing: 0,
+      ).copyWith(fontSize: bodyFontSize),
+    );
+    canvas.restore();
+    return size.height;
+  }
+
+  void _drawSymbolPanel(
+    Canvas canvas,
+    Offset offset,
+    Size size,
+    String rawSymbol,
+    int index,
+  ) {
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(offset.dx, offset.dy, size.width, size.height),
+      const Radius.circular(28),
+    );
+    canvas.drawRRect(
+      rect,
+      Paint()..color = DreamColors.surface.withValues(alpha: 0.74),
+    );
+    canvas.drawRRect(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = DreamColors.aurora.withValues(alpha: 0.16),
+    );
+
+    final symbol = _symbolShareText(rawSymbol);
+    final badgeRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(offset.dx + 24, offset.dy + 26, 48, 48),
+      const Radius.circular(16),
+    );
+    canvas.drawRRect(
+      badgeRect,
+      Paint()..color = DreamColors.aurora.withValues(alpha: 0.18),
+    );
+    _paintText(
+      canvas,
+      '$index',
+      Offset(offset.dx + 42, offset.dy + 35),
+      maxWidth: 24,
+      maxLines: 1,
+      style: const TextStyle(
+        color: DreamColors.aurora,
+        fontSize: 23,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 0,
+      ),
+    );
+
+    canvas.save();
+    canvas.clipRRect(rect);
+    _paintText(
+      canvas,
+      symbol.title,
+      Offset(offset.dx + 92, offset.dy + 26),
+      maxWidth: size.width - 122,
+      maxLines: 1,
+      style: const TextStyle(
+        color: DreamColors.textPrimary,
+        fontSize: 27,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 0,
+      ),
+    );
+    _paintText(
+      canvas,
+      symbol.detail,
+      Offset(offset.dx + 92, offset.dy + 68),
+      maxWidth: size.width - 122,
+      maxLines: 2,
+      style: const TextStyle(
+        color: DreamColors.textSecondary,
+        fontSize: 22,
+        height: 1.22,
+        letterSpacing: 0,
+      ),
+    );
+    canvas.restore();
+  }
+
+  ({String title, String detail}) _symbolShareText(String rawSymbol) {
+    final canonical = canonicalDreamSymbol(rawSymbol);
+    if (canonical != null) {
+      return (title: canonical.name, detail: canonical.meaning);
+    }
+
+    final cleaned = rawSymbol.trim();
+    if (cleaned.isEmpty) {
+      return (
+        title: 'No recurring symbols',
+        detail: 'DreamLog needs more dreams before it can map symbol patterns.'
+      );
+    }
+
+    final parts = cleaned.split(RegExp(r'\s+-\s+'));
+    final title = parts.first.trim();
+    final detail = parts.length > 1
+        ? parts.sublist(1).join(' - ').trim()
+        : 'Muncul sebagai simbol berulang yang bisa menjadi petunjuk pola mimpi minggu ini.';
+    return (title: title, detail: detail);
+  }
+
+  String _topEmotion(List<DreamEntry> entries) {
+    if (entries.isEmpty) {
+      return 'Quiet';
+    }
+    final counts = <String, int>{};
+    for (final entry in entries) {
+      counts.update(
+        entry.primaryEmotion,
+        (value) => value + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.first.key;
+  }
+
   double _paintSection(
     Canvas canvas, {
     required String label,
@@ -497,6 +1323,35 @@ class ExportService {
     required Color textColor,
   }) {
     final width = _pillWidth(text);
+    final rect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(offset.dx, offset.dy, width, 48),
+      const Radius.circular(999),
+    );
+    canvas.drawRRect(rect, Paint()..color = color);
+    _paintText(
+      canvas,
+      text,
+      Offset(offset.dx + 22, offset.dy + 9),
+      maxWidth: width - 44,
+      maxLines: 1,
+      style: TextStyle(
+        color: textColor,
+        fontSize: 22,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0,
+      ),
+    );
+  }
+
+  void _drawConstrainedPill(
+    Canvas canvas,
+    Offset offset,
+    String text, {
+    required double maxWidth,
+    required Color color,
+    required Color textColor,
+  }) {
+    final width = _pillWidth(text).clamp(96, maxWidth).toDouble();
     final rect = RRect.fromRectAndRadius(
       Rect.fromLTWH(offset.dx, offset.dy, width, 48),
       const Radius.circular(999),

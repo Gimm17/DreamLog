@@ -27,10 +27,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: '/splash',
-        pageBuilder: (context, state) => _fadePage(
-          state,
-          const SplashScreen(),
-          duration: const Duration(milliseconds: 520),
+        pageBuilder: (context, state) => NoTransitionPage(
+          key: state.pageKey,
+          child: const SplashScreen(),
         ),
       ),
       GoRoute(

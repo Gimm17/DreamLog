@@ -246,12 +246,16 @@ class _DreamListCard extends ConsumerWidget {
                   children: [
                     Row(
                       children: [
-                        Text(
-                          DateFormat('dd - EEEE').format(entry.createdAt),
-                          style: textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
+                        Expanded(
+                          child: Text(
+                            DateFormat('dd - EEEE').format(entry.createdAt),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
                         ),
-                        const Spacer(),
+                        const SizedBox(width: 10),
                         EmotionChip(label: entry.primaryEmotion, compact: true),
                       ],
                     ),
@@ -275,11 +279,20 @@ class _DreamListCard extends ConsumerWidget {
                         const Icon(Icons.auto_awesome,
                             size: 18, color: DreamColors.primaryLight),
                         const SizedBox(width: 6),
-                        Text('${entry.symbols.length} symbols',
-                            style: textTheme.bodyMedium),
-                        const Spacer(),
-                        ClarityBar(value: entry.clarity),
-                        const Spacer(),
+                        Expanded(
+                          child: Text(
+                            '${entry.symbols.length} symbols',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodyMedium,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        SizedBox(
+                          width: 72,
+                          child: ClarityBar(value: entry.clarity),
+                        ),
+                        const SizedBox(width: 6),
                         IconButton(
                           onPressed: () => ref
                               .read(dreamJournalProvider.notifier)

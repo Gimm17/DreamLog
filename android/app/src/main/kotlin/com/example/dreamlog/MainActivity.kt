@@ -27,6 +27,7 @@ import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
 import java.nio.charset.StandardCharsets
+import java.util.ArrayList
 
 class MainActivity : FlutterActivity() {
     private var pendingImportResult: MethodChannel.Result? = null
@@ -56,6 +57,30 @@ class MainActivity : FlutterActivity() {
                             result.error(
                                 "share_failed",
                                 error.message ?: "Could not share file.",
+                                null
+                            )
+                        }
+                    }
+
+                    "shareFiles" -> {
+                        val paths = call.argument<List<String>>("paths") ?: emptyList()
+                        val mimeType = call.argument<String>("mimeType") ?: "*/*"
+                        val chooserTitle =
+                            call.argument<String>("chooserTitle") ?: "Share with"
+                        val text = call.argument<String>("text")
+
+                        if (paths.isEmpty()) {
+                            result.error("missing_paths", "No share files were provided.", null)
+                            return@setMethodCallHandler
+                        }
+
+                        try {
+                            shareFiles(paths, mimeType, chooserTitle, text)
+                            result.success(null)
+                        } catch (error: Exception) {
+                            result.error(
+                                "share_failed",
+                                error.message ?: "Could not share files.",
                                 null
                             )
                         }
@@ -501,6 +526,59 @@ class MainActivity : FlutterActivity() {
 
         val chooser = Intent.createChooser(intent, chooserTitle).apply {
             clipData = ClipData.newUri(contentResolver, "DreamLog share", uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        startActivity(chooser)
+    }
+
+    private fun shareFiles(
+        paths: List<String>,
+        mimeType: String,
+        chooserTitle: String,
+        text: String?
+    ) {
+        val files = paths.map { File(it) }
+        require(files.all { it.exists() }) { "One or more share files do not exist." }
+
+        val uris = ArrayList<Uri>(
+            files.map { file ->
+                FileProvider.getUriForFile(
+                    this,
+                    "${applicationContext.packageName}.fileprovider",
+                    file
+                )
+            }
+        )
+
+        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+            type = mimeType
+            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+            putExtra(Intent.EXTRA_TITLE, chooserTitle)
+            if (!text.isNullOrBlank()) {
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+            clipData = ClipData.newUri(contentResolver, "DreamLog share", uris.first())
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        val targets = packageManager.queryIntentActivities(
+            intent,
+            PackageManager.MATCH_DEFAULT_ONLY
+        )
+        require(targets.isNotEmpty()) { "No app can share these files." }
+        targets.forEach { target ->
+            uris.forEach { uri ->
+                grantUriPermission(
+                    target.activityInfo.packageName,
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+        }
+
+        val chooser = Intent.createChooser(intent, chooserTitle).apply {
+            clipData = ClipData.newUri(contentResolver, "DreamLog share", uris.first())
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 

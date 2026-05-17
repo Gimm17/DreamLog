@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../models/dream_entry.dart';
 import '../models/dream_interpretation.dart';
+import '../models/dream_symbol_catalog.dart';
 import '../models/weekly_report.dart';
 
 class AiService {
@@ -40,7 +41,10 @@ class AiService {
         user: dreamText,
         maxTokens: 1100,
       );
-      return DreamInterpretation.fromJson(_jsonObject(text));
+      return _normalizeInterpretation(
+        DreamInterpretation.fromJson(_jsonObject(text)),
+        dreamText,
+      );
     } catch (_) {
       return _fallbackInterpretation(dreamText);
     }
@@ -58,7 +62,10 @@ class AiService {
             entries.take(14).map((entry) => entry.toJson()).toList()),
         maxTokens: 1400,
       );
-      return WeeklyReport.fromJson(_jsonObject(text));
+      return _normalizeWeeklyReport(
+        WeeklyReport.fromJson(_jsonObject(text)),
+        entries,
+      );
     } catch (_) {
       return _fallbackWeeklyReport(entries);
     }
@@ -139,29 +146,45 @@ class AiService {
     }
   }
 
+  DreamInterpretation _normalizeInterpretation(
+    DreamInterpretation interpretation,
+    String dreamText,
+  ) {
+    return DreamInterpretation(
+      interpretation: interpretation.interpretation,
+      symbols: normalizeDreamSymbols(interpretation.symbols, dreamText),
+      primaryEmotion: interpretation.primaryEmotion,
+      secondaryEmotions: interpretation.secondaryEmotions,
+      reflectionQuestion: interpretation.reflectionQuestion,
+    );
+  }
+
+  WeeklyReport _normalizeWeeklyReport(
+    WeeklyReport report,
+    List<DreamEntry> entries,
+  ) {
+    final dreamText = entries.map((entry) => entry.content).join('\n');
+    return WeeklyReport(
+      weekSummary: report.weekSummary,
+      dominantTheme: report.dominantTheme,
+      recurringSymbols: normalizeDreamSymbols(
+        report.recurringSymbols,
+        dreamText,
+      ),
+      emotionalJourney: report.emotionalJourney,
+      insight: report.insight,
+      affirmation: report.affirmation,
+    );
+  }
+
   DreamInterpretation _fallbackInterpretation(String dreamText) {
     final lower = dreamText.toLowerCase();
-    final symbols = <String>[
-      if (lower.contains('water') ||
-          lower.contains('ocean') ||
-          lower.contains('laut'))
-        'Ocean',
-      if (lower.contains('door') || lower.contains('pintu')) 'Door',
-      if (lower.contains('key') || lower.contains('kunci')) 'Key',
-      if (lower.contains('moon') || lower.contains('bulan')) 'Moon',
-      if (lower.contains('clock') ||
-          lower.contains('time') ||
-          lower.contains('waktu'))
-        'Clock',
-      if (lower.contains('city') || lower.contains('kota')) 'City',
-    ];
+    final symbols = normalizeDreamSymbols(const [], dreamText);
 
     return DreamInterpretation(
       interpretation:
           'Mimpi ini mengarah pada proses memahami emosi yang sedang berubah. Beberapa simbol terasa seperti ajakan untuk memperhatikan bagian hidup yang ingin dibuka, dilepas, atau dipahami dengan lebih tenang.',
-      symbols: symbols.isEmpty
-          ? const ['Door', 'Moon', 'Path']
-          : symbols.take(5).toList(),
+      symbols: symbols,
       primaryEmotion: lower.contains('run') ||
               lower.contains('test') ||
               lower.contains('lari') ||
@@ -190,7 +213,8 @@ class AiService {
     final symbolCounts = <String, int>{};
     for (final entry in entries) {
       for (final symbol in entry.symbols) {
-        symbolCounts.update(symbol, (value) => value + 1, ifAbsent: () => 1);
+        final canonical = canonicalDreamSymbol(symbol)?.name ?? symbol;
+        symbolCounts.update(canonical, (value) => value + 1, ifAbsent: () => 1);
       }
     }
     final recurring = symbolCounts.entries.toList()
@@ -202,7 +226,8 @@ class AiService {
       dominantTheme:
           entries.isEmpty ? 'A Quiet Beginning' : 'A Week of Hidden Signals',
       recurringSymbols: recurring.isEmpty
-          ? const ['Water', 'Door', 'Light']
+          ? normalizeDreamSymbols(
+              const [], entries.map((e) => e.content).join('\n'))
           : recurring.take(5).map((entry) => entry.key).toList(),
       emotionalJourney:
           'Perjalanan emosinya bergerak dari observasi, rasa ingin tahu, lalu kebutuhan untuk menemukan kejelasan.',
@@ -217,6 +242,20 @@ const _dreamSystemPrompt = '''
 You are DreamLog AI, an empathetic dream analyst with knowledge of Jungian
 psychology, symbolism, and emotional pattern recognition.
 Support Bahasa Indonesia and English, matching the user's language.
+You must choose dream symbols from the allowed taxonomy below.
+Rules for symbols:
+- Return 2-5 symbols.
+- Use only exact names from the allowed taxonomy.
+- Prefer concrete symbols that literally appear in the dream narrative.
+- Do not over-infer metaphors. For example, choose "Key/Lock" only if the
+  dream explicitly mentions a key, lock, locked door, gembok, kunci, or unlock.
+- If the user mentions a garden, flowers, or taman, choose "Garden/Flowers",
+  not "Key/Lock".
+- If a symbol is not present in the dream text, do not include it just because
+  it sounds psychologically relevant.
+
+$dreamSymbolCatalogPrompt
+
 Respond only as valid JSON with this exact shape:
 {
   "interpretation": "...",
@@ -232,6 +271,9 @@ mental-health conditions.
 const _weeklySystemPrompt = '''
 You are DreamLog AI generating a weekly dream pattern report.
 You will receive an array of dream entries. Respond only as valid JSON:
+Use recurring_symbols only from this allowed taxonomy:
+$dreamSymbolCatalogPrompt
+
 {
   "week_summary": "...",
   "dominant_theme": "...",
