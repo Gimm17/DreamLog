@@ -7,24 +7,27 @@ import '../models/dream_interpretation.dart';
 import '../models/dream_symbol_catalog.dart';
 import '../models/weekly_report.dart';
 
+/// Injected at build time: `flutter run --dart-define=LIMITROUTER_API_KEY=sk-lr-...`
+/// Never hardcode a key here, and never write it to device storage.
+const _apiKey = String.fromEnvironment('LIMITROUTER_API_KEY');
+
 class AiService {
   AiService({
     Dio? dio,
-    String? apiKey,
     String? model,
   })  : _dio = dio ??
             Dio(
               BaseOptions(
-                baseUrl: 'https://api.tokenrouter.com/v1',
+                baseUrl: 'https://limitrouter.com/v1',
                 connectTimeout: const Duration(seconds: 20),
                 receiveTimeout: const Duration(seconds: 45),
               ),
             ),
-        _apiKey = apiKey ?? const String.fromEnvironment('TOKENROUTER_API_KEY'),
-        _model = model ?? 'anthropic/claude-haiku-4.5';
+        _model = model ?? defaultModel;
+
+  static const defaultModel = 'gemini-3.8-flash';
 
   final Dio _dio;
-  final String _apiKey;
   final String _model;
 
   bool get isConfigured => _apiKey.trim().isNotEmpty;
@@ -183,7 +186,11 @@ class AiService {
 
     return DreamInterpretation(
       interpretation:
-          'Mimpi ini mengarah pada proses memahami emosi yang sedang berubah. Beberapa simbol terasa seperti ajakan untuk memperhatikan bagian hidup yang ingin dibuka, dilepas, atau dipahami dengan lebih tenang.',
+          'Mimpi ini masih hangat di tepi ingatan, dan seperti kabut yang belum '
+          'tersentuh fajar, ia belum ingin dibaca terlalu cepat. Ada bagian '
+          'dirimu yang sedang menaruh sesuatu di ambang pintu - mungkin ingin '
+          'dibuka, mungkin hanya ingin ditemani sebentar. Biarkan jawabannya '
+          'datang pelan.',
       symbols: symbols,
       primaryEmotion: lower.contains('run') ||
               lower.contains('test') ||
@@ -193,7 +200,7 @@ class AiService {
           : 'Peaceful',
       secondaryEmotions: const ['Curious', 'Reflective'],
       reflectionQuestion:
-          'Bagian mana dari mimpi ini yang paling terasa dekat dengan hidupmu saat ini?',
+          'Kalau mimpi ini sebuah pintu, apa yang kamu dengar dari baliknya?',
     );
   }
 
@@ -222,18 +229,24 @@ class AiService {
 
     return WeeklyReport(
       weekSummary:
-          'Mimpi-mimpi terbaru menunjukkan pola emosi yang sedang mencari bentuk. Simbol yang berulang dapat menjadi petunjuk tentang kebutuhan untuk merasa aman, memahami perubahan, dan memberi ruang pada intuisi.',
+          'Minggu ini mimpi-mimpimu berjalan seperti sungai yang mencari '
+          'lautnya sendiri - berkelok, sempat berhenti, lalu bergerak lagi. '
+          'Ada yang ingin kamu dengar dari arusnya, meski belum tentu dalam '
+          'bentuk kalimat.',
       dominantTheme:
-          entries.isEmpty ? 'A Quiet Beginning' : 'A Week of Hidden Signals',
+          entries.isEmpty ? 'Awal yang Masih Bisu' : 'Jejak yang Berulang',
       recurringSymbols: recurring.isEmpty
           ? normalizeDreamSymbols(
               const [], entries.map((e) => e.content).join('\n'))
           : recurring.take(5).map((entry) => entry.key).toList(),
       emotionalJourney:
-          'Perjalanan emosinya bergerak dari observasi, rasa ingin tahu, lalu kebutuhan untuk menemukan kejelasan.',
+          'Dari keingintahuan yang masih malu-malu, menuju sesuatu yang mulai '
+          'berani menampakkan wajahnya. Perjalanannya belum selesai - dan itu '
+          'tidak apa-apa.',
       insight:
-          'Pola terkuat minggu ini adalah dorongan untuk memahami sesuatu tanpa memaksakan jawaban terlalu cepat.',
-      affirmation: 'Aku boleh bergerak pelan dan tetap menuju kejelasan.',
+          'Yang paling sering kembali bukan jawaban, melainkan pertanyaan yang '
+          'sama, diulang dengan cara berbeda. Mungkin itu bukan kebetulan.',
+      affirmation: 'Aku tidak harus tahu sekarang. Aku cukup hadir.',
     );
   }
 }
@@ -256,6 +269,31 @@ Rules for symbols:
 
 $dreamSymbolCatalogPrompt
 
+VOICE AND STYLE - this matters as much as the analysis:
+- Write like a poet who happens to know Jung, not like a clinician filing a
+  report. The reader is half-awake, holding a fading image; meet them there.
+- Use one or two small metaphors or images of your own, drawn from the dream's
+  own imagery. Let a well-chosen figure carry the meaning instead of
+  explaining it. Prefer "sumur itu menyimpan sesuatu yang belum siap
+  dipanggil" over "sumur melambangkan kedalaman alam bawah sadar".
+- Allow rhythm and cadence. Vary sentence length; a short sentence after a
+  long one lands like a breath. A fragment is allowed.
+- In Bahasa Indonesia, choose diction with warmth and literary texture
+  (senyap, jejak, samar, rindu, hening, fajar) rather than bureaucratic
+  phrasing (proses, mengindikasikan, berkaitan dengan, aspek).
+- Never use these stiff connectors: "hal ini menunjukkan bahwa",
+  "dapat diartikan sebagai", "berkaitan dengan", "merupakan simbol dari",
+  "mencerminkan adanya". Show the image instead of labelling it.
+- The reflection question should feel like something a friend whispers, not an
+  intake form. It may itself be poetic.
+
+Hard limits:
+- Do not become vague or mystical to the point of saying nothing. Every image
+  must still trace back to something actually in the dream.
+- Still name the emotion plainly; lyricism is for the interpretation, not for
+  the primary_emotion field.
+- Do not diagnose medical or mental-health conditions.
+
 Respond only as valid JSON with this exact shape:
 {
   "interpretation": "...",
@@ -264,8 +302,6 @@ Respond only as valid JSON with this exact shape:
   "secondary_emotions": ["...", "..."],
   "reflection_question": "..."
 }
-Keep the tone warm, curious, and non-judgmental. Do not diagnose medical or
-mental-health conditions.
 ''';
 
 const _weeklySystemPrompt = '''
@@ -273,6 +309,30 @@ You are DreamLog AI generating a weekly dream pattern report.
 You will receive an array of dream entries. Respond only as valid JSON:
 Use recurring_symbols only from this allowed taxonomy:
 $dreamSymbolCatalogPrompt
+
+VOICE AND STYLE:
+- Write like a poet reading someone's week of dreams, not like an analyst
+  summarising a dataset. The reader is meeting themselves here.
+- "dominant_theme" is a small title: 3-7 words, evocative and concrete, no
+  clinical nouns. Think "Hujan yang Belum Selesai" rather than "Pola Emosional
+  Mingguan".
+- "affirmation" is one first-person line the reader could almost whisper.
+  Let it carry an image; avoid vague self-help phrasing.
+- Use one or two metaphors per section, drawn from the week's own symbols.
+  Prefer showing the image over naming the mechanism.
+- In Bahasa Indonesia, choose diction with warmth and literary texture
+  (senyap, jejak, samar, rindu, hening, fajar, ampas, akar) over bureaucratic
+  phrasing (proses, mengindikasikan, berkaitan dengan, aspek, terkait).
+- Never use: "hal ini menunjukkan bahwa", "dapat diartikan sebagai",
+  "berkaitan dengan", "merupakan simbol dari", "mencerminkan adanya".
+- Vary sentence length. A short sentence after a long one lands like a breath.
+
+Hard limits:
+- Every image must trace back to something actually in the dreams. Do not
+  invent symbols or events that are not present.
+- recurring_symbols must still be exact taxonomy names, not poetic inventions.
+- Keep it grounded: do not drift into vague mysticism.
+- Do not diagnose medical or mental-health conditions.
 
 {
   "week_summary": "...",

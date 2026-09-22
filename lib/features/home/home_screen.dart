@@ -63,7 +63,12 @@ class _HomeContent extends StatelessWidget {
 
     return SafeArea(
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(24, 22, 24, 32),
+        padding: const EdgeInsets.fromLTRB(
+          DreamLayout.screenPadding,
+          DreamLayout.screenTop,
+          DreamLayout.screenPadding,
+          DreamLayout.tabBottom,
+        ),
         children: [
           Row(
             children: [
@@ -100,7 +105,7 @@ class _HomeContent extends StatelessWidget {
           const SizedBox(height: 36),
           DreamCard(
             gradient: DreamGradients.primary,
-            radius: 26,
+            radius: DreamRadii.xl,
             padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 34),
             onTap: () => context.push('/new-dream'),
             child: Column(
@@ -129,14 +134,14 @@ class _HomeContent extends StatelessWidget {
           ),
           const SizedBox(height: 36),
           const SectionLabel('Last Dream'),
-          const SizedBox(height: 12),
+          const SizedBox(height: DreamSpacing.labelGap),
           if (lastDream == null)
             const _EmptyLastDreamCard()
           else
             _LastDreamCard(entry: lastDream),
           const SizedBox(height: 36),
           const SectionLabel('Weekly Mood'),
-          const SizedBox(height: 18),
+          const SizedBox(height: DreamSpacing.labelGap),
           _WeeklyMoodStrip(entries: entries),
           const SizedBox(height: 36),
           if (topSymbol == null)
@@ -372,7 +377,7 @@ class _EmptySymbolCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SectionLabel('Symbol Tracker'),
-          const SizedBox(height: 14),
+          const SizedBox(height: DreamSpacing.labelGap),
           Text(
             'Your most frequent symbols will appear here after you save dreams.',
             style:

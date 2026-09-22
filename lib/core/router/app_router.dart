@@ -126,6 +126,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/dream/:id/edit',
+        pageBuilder: (context, state) => _slidePage(
+          state,
+          NewDreamEntryScreen(editingId: state.pathParameters['id']),
+        ),
+      ),
+      GoRoute(
         path: '/ai-result',
         pageBuilder: (context, state) => _slidePage(
           state,

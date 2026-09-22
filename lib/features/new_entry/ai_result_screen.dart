@@ -74,7 +74,12 @@ class AIResultScreen extends ConsumerWidget {
         child: Stack(
           children: [
             ListView(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 132),
+              padding: const EdgeInsets.fromLTRB(
+                DreamLayout.screenPadding,
+                DreamLayout.screenTop,
+                DreamLayout.screenPadding,
+                DreamLayout.dockedBarBottom,
+              ),
               children: [
                 IconButton(
                   alignment: Alignment.centerLeft,
@@ -84,12 +89,12 @@ class AIResultScreen extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.fromLTRB(20, 28, 20, 30),
                   decoration: BoxDecoration(
-                    gradient: const LinearGradient(
+                    gradient: LinearGradient(
                       colors: [DreamColors.surface, DreamColors.background],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
                     ),
-                    borderRadius: BorderRadius.circular(26),
+                    borderRadius: BorderRadius.circular(DreamRadii.xl),
                   ),
                   child: Column(
                     children: [
@@ -155,7 +160,7 @@ class AIResultScreen extends ConsumerWidget {
                   border: Border.all(
                     color: DreamColors.borderMuted.withValues(alpha: 0.80),
                   ),
-                  borderRadius: BorderRadius.circular(32),
+                  borderRadius: BorderRadius.circular(DreamRadii.xl),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.38),

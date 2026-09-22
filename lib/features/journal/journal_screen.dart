@@ -44,7 +44,12 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
             return Stack(
               children: [
                 ListView(
-                  padding: const EdgeInsets.fromLTRB(28, 24, 28, 128),
+                  padding: const EdgeInsets.fromLTRB(
+                    DreamLayout.screenPadding,
+                    DreamLayout.screenTop,
+                    DreamLayout.screenPadding,
+                    DreamLayout.dockedBarBottom,
+                  ),
                   children: [
                     Row(
                       children: [
@@ -105,7 +110,7 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                                     setState(() => _filter = label),
                                 backgroundColor: Colors.transparent,
                                 selectedColor: DreamColors.primaryLight,
-                                side: const BorderSide(
+                                side: BorderSide(
                                     color: DreamColors.borderMuted),
                                 labelStyle: TextStyle(
                                   color: _filter == label
@@ -137,8 +142,8 @@ class _JournalScreenState extends ConsumerState<JournalScreen> {
                   ],
                 ),
                 Positioned(
-                  right: 18,
-                  bottom: 18,
+                  right: DreamLayout.screenPadding,
+                  bottom: 24,
                   child: GradientButton(
                     label: 'New Dream',
                     icon: Icons.edit_outlined,
@@ -327,7 +332,7 @@ class _EmptyJournal extends StatelessWidget {
       padding: const EdgeInsets.all(32),
       child: Column(
         children: [
-          const Icon(Icons.dark_mode_outlined,
+          Icon(Icons.dark_mode_outlined,
               size: 72, color: DreamColors.borderMuted),
           const SizedBox(height: 18),
           Text(

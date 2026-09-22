@@ -29,9 +29,9 @@ class DreamBottomNav extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(top: 8),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: DreamColors.surfaceHigh,
-          borderRadius: BorderRadius.only(
+          borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(18),
             topRight: Radius.circular(18),
           ),

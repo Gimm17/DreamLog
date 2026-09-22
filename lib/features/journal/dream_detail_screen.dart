@@ -53,8 +53,12 @@ class DreamDetailScreen extends ConsumerWidget {
                 icon: const Icon(Icons.share_outlined),
               ),
               IconButton(
-                onPressed: () => _showMoreOptions(context, entry),
-                icon: const Icon(Icons.more_vert),
+                onPressed: () => context.push('/dream/${entry.id}/edit'),
+                icon: const Icon(Icons.edit_outlined),
+              ),
+              IconButton(
+                onPressed: () => _confirmDelete(context, ref, entry),
+                icon: const Icon(Icons.delete_outline),
               ),
             ],
             flexibleSpace: FlexibleSpaceBar(
@@ -64,12 +68,12 @@ class DreamDetailScreen extends ConsumerWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               background: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     colors: [
                       DreamColors.background,
                       DreamColors.surface,
-                      Color(0x336B46C1),
+                      const Color(0x336B46C1),
                     ],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
@@ -87,7 +91,12 @@ class DreamDetailScreen extends ConsumerWidget {
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+              padding: const EdgeInsets.fromLTRB(
+                DreamLayout.screenPadding,
+                DreamLayout.screenTop,
+                DreamLayout.screenPadding,
+                DreamLayout.tabBottom,
+              ),
               child: _DetailContent(entry: entry),
             ),
           ),
@@ -156,7 +165,7 @@ class _DetailContent extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 18),
-              const Divider(color: DreamColors.borderMuted),
+              Divider(color: DreamColors.borderMuted),
               const SizedBox(height: 12),
               Text(
                 interpretation.reflectionQuestion,
@@ -168,7 +177,7 @@ class _DetailContent extends ConsumerWidget {
         ),
         const SizedBox(height: 26),
         const SectionLabel('Detected Symbols'),
-        const SizedBox(height: 14),
+        const SizedBox(height: DreamSpacing.labelGap),
         SizedBox(
           height: 118,
           child: ListView.separated(
@@ -203,7 +212,7 @@ class _DetailContent extends ConsumerWidget {
         ),
         const SizedBox(height: 26),
         const SectionLabel('Emotions'),
-        const SizedBox(height: 14),
+        const SizedBox(height: DreamSpacing.labelGap),
         Wrap(
           spacing: 10,
           runSpacing: 10,
@@ -434,29 +443,37 @@ String _shareErrorMessage(Object error) {
   return message.isEmpty ? 'Unknown error.' : message;
 }
 
-Future<void> _showMoreOptions(BuildContext context, DreamEntry entry) {
-  return showModalBottomSheet<void>(
+Future<void> _confirmDelete(
+  BuildContext context,
+  WidgetRef ref,
+  DreamEntry entry,
+) async {
+  final confirmed = await showDialog<bool>(
     context: context,
-    backgroundColor: DreamColors.surfaceTwo,
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('Dream ID'),
-              subtitle: Text(entry.id),
-            ),
-            ListTile(
-              leading: const Icon(Icons.auto_awesome),
-              title: const Text('Primary emotion'),
-              subtitle: Text(entry.primaryEmotion),
-            ),
-          ],
-        ),
+    builder: (context) => AlertDialog(
+      title: const Text('Delete this dream?'),
+      content: Text(
+        '"${entry.title}" will be removed from this device. This cannot be undone.',
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(true),
+          child: const Text('Delete'),
+        ),
+      ],
     ),
   );
+
+  if (confirmed != true) {
+    return;
+  }
+  await ref.read(dreamJournalProvider.notifier).deleteEntry(entry.id);
+  if (context.mounted) {
+    context.pop();
+  }
 }
+

@@ -24,6 +24,9 @@ class DreamCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Registers a theme dependency so a palette swap repaints the card even
+    // though the fallback below reads DreamColors statically.
+    Theme.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: gradient == null ? color ?? DreamColors.surface : null,

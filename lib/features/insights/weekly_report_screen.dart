@@ -103,7 +103,7 @@ class WeeklyReportScreen extends ConsumerWidget {
             Container(
               height: 124,
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   colors: [
                     DreamColors.primary,
                     DreamColors.aurora,
@@ -143,7 +143,7 @@ class WeeklyReportScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 26),
             const SectionLabel('Summary'),
-            const SizedBox(height: 14),
+            const SizedBox(height: DreamSpacing.labelGap),
             Text(
               value.weekSummary,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -190,11 +190,11 @@ class WeeklyReportScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 26),
             const SectionLabel('Emotional Journey'),
-            const SizedBox(height: 14),
+            const SizedBox(height: DreamSpacing.labelGap),
             _Timeline(text: value.emotionalJourney, entries: entries),
             const SizedBox(height: 26),
             const SectionLabel('Recurring Symbols'),
-            const SizedBox(height: 14),
+            const SizedBox(height: DreamSpacing.labelGap),
             Row(
               children: [
                 if (value.recurringSymbols.isEmpty)

@@ -26,7 +26,12 @@ class InsightsScreen extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(28, 28, 28, 44),
+          padding: const EdgeInsets.fromLTRB(
+            DreamLayout.screenPadding,
+            DreamLayout.screenTop,
+            DreamLayout.screenPadding,
+            DreamLayout.tabBottom,
+          ),
           children: [
             Row(
               children: [
@@ -55,14 +60,17 @@ class InsightsScreen extends ConsumerWidget {
               const _EmptyWeeklyReportCard()
             else
               report!.when(
-                loading: () => const DreamCard(
-                  child: Center(child: CircularProgressIndicator()),
+                // These DreamCards are deliberately not const: they paint from
+                // the static palette and must rebuild when the theme changes.
+                // ignore: prefer_const_constructors
+                loading: () => DreamCard(
+                  child: const Center(child: CircularProgressIndicator()),
                 ),
                 error: (error, stackTrace) =>
                     DreamCard(child: Text(error.toString())),
                 data: (value) => DreamCard(
                   gradient: DreamGradients.card,
-                  radius: 22,
+                  radius: DreamRadii.xl,
                   padding: EdgeInsets.zero,
                   onTap: () => context.push('/weekly-report'),
                   child: IntrinsicHeight(
@@ -73,8 +81,8 @@ class InsightsScreen extends ConsumerWidget {
                           decoration: const BoxDecoration(
                             gradient: DreamGradients.aurora,
                             borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(22),
-                              bottomLeft: Radius.circular(22),
+                              topLeft: Radius.circular(DreamRadii.xl),
+                              bottomLeft: Radius.circular(DreamRadii.xl),
                             ),
                           ),
                         ),
@@ -136,15 +144,15 @@ class InsightsScreen extends ConsumerWidget {
               ),
             const SizedBox(height: 36),
             const SectionLabel('Top Emotions This Month'),
-            const SizedBox(height: 18),
+            const SizedBox(height: DreamSpacing.labelGap),
             _EmotionBars(entries: entries),
             const SizedBox(height: 36),
             const SectionLabel('Mood Calendar'),
-            const SizedBox(height: 18),
+            const SizedBox(height: DreamSpacing.labelGap),
             _MoodCalendar(entries: entries),
             const SizedBox(height: 36),
             const SectionLabel('Recurring Symbols'),
-            const SizedBox(height: 18),
+            const SizedBox(height: DreamSpacing.labelGap),
             _RecurringSymbols(),
             const SizedBox(height: 36),
             DreamCard(
@@ -186,12 +194,12 @@ class _EmptyWeeklyReportCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return DreamCard(
       gradient: DreamGradients.card,
-      radius: 22,
+      radius: DreamRadii.xl,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SectionLabel('Weekly Report'),
-          const SizedBox(height: 18),
+          const SizedBox(height: DreamSpacing.labelGap),
           Text(
             'No report yet',
             style: Theme.of(context)

@@ -56,6 +56,10 @@ class DreamRepository {
     }
   }
 
+  Future<void> delete(String id) async {
+    await _box.delete(id);
+  }
+
   Future<void> toggleBookmark(String id) async {
     final entry = await byId(id);
     if (entry == null) {

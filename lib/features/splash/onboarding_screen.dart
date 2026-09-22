@@ -62,13 +62,13 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       body: Stack(
         fit: StackFit.expand,
         children: [
-          const DecoratedBox(
+          DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Color(0xFF171225),
+                  const Color(0xFF171225),
                   DreamColors.background,
-                  Color(0xFF08070D),
+                  const Color(0xFF08070D),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,

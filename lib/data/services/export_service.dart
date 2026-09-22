@@ -209,17 +209,6 @@ class ExportService {
     return file;
   }
 
-  Future<File> exportDreamsJson(List<DreamEntry> entries) async {
-    final dir = await getApplicationDocumentsDirectory();
-    final stamp = DateTime.now().millisecondsSinceEpoch;
-    final file = File('${dir.path}/dreamlog-export-$stamp.json');
-    const encoder = JsonEncoder.withIndent('  ');
-    await file.writeAsString(
-      encoder.convert(entries.map((entry) => entry.toJson()).toList()),
-    );
-    return file;
-  }
-
   Future<File> exportDreamLogBackupJson({
     required List<DreamEntry> entries,
     required UserProfile profile,
@@ -230,7 +219,7 @@ class ExportService {
     final file = File('${dir.path}/dreamlog-backup-$stamp.json');
     final profileJson = Map<String, dynamic>.from(profile.toJson())
       ..remove('avatar_path');
-    final settingsJson = settings.copyWith(tokenRouterApiKey: '').toJson();
+    final settingsJson = settings.toJson();
     final avatar = await _avatarBackup(profile.avatarPath);
 
     final backup = <String, dynamic>{
@@ -307,21 +296,6 @@ class ExportService {
     }
 
     return _createDreamShareImageWithFlutterCanvas(entry, format: format);
-  }
-
-  Future<File> createWeeklyReportShareImage({
-    required WeeklyReport report,
-    required List<DreamEntry> entries,
-    required String range,
-    required DreamShareFormat format,
-  }) async {
-    final files = await createWeeklyReportShareImages(
-      report: report,
-      entries: entries,
-      range: range,
-      format: format,
-    );
-    return files.first;
   }
 
   Future<List<File>> createWeeklyReportShareImages({
@@ -418,10 +392,10 @@ class ExportService {
         ..shader = ui.Gradient.linear(
           Offset.zero,
           Offset(size.width, size.height),
-          const [
+          [
             DreamColors.background,
             DreamColors.surface,
-            Color(0xFF10281F),
+            const Color(0xFF10281F),
           ],
         ),
     );

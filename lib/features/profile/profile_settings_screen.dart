@@ -38,13 +38,18 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 42),
+          padding: const EdgeInsets.fromLTRB(
+            DreamLayout.screenPadding,
+            DreamLayout.screenTop,
+            DreamLayout.screenPadding,
+            DreamLayout.tabBottom,
+          ),
           children: [
             Container(
               padding: const EdgeInsets.symmetric(vertical: 32),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [DreamColors.background, Color(0xFF1A1730)],
+                  colors: [DreamColors.background, const Color(0xFF1A1730)],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -62,7 +67,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
                           child: Container(
                             width: 28,
                             height: 28,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               color: DreamColors.surfaceTwo,
                               shape: BoxShape.circle,
                             ),
@@ -101,7 +106,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             ),
             const SizedBox(height: 30),
             const SectionLabel('Reminders'),
-            const SizedBox(height: 12),
+            const SizedBox(height: DreamSpacing.labelGap),
             _SettingsTile(
               icon: Icons.dark_mode_outlined,
               title: 'Morning Reminder',
@@ -119,7 +124,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             ),
             const SizedBox(height: 24),
             const SectionLabel('Preferences'),
-            const SizedBox(height: 12),
+            const SizedBox(height: DreamSpacing.labelGap),
             _SettingsTile(
               icon: Icons.language_outlined,
               title: 'Language',
@@ -133,17 +138,6 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
               onTap: () => _selectTheme(settings),
             ),
             _SettingsTile(
-              icon: Icons.key_outlined,
-              title: 'TokenRouter API Key',
-              value: ref.watch(effectiveAiApiKeyProvider).isNotEmpty
-                  ? 'Configured'
-                  : 'Not set',
-              valueColor: ref.watch(effectiveAiApiKeyProvider).isNotEmpty
-                  ? DreamColors.aurora
-                  : DreamColors.textSecondary,
-              onTap: () => _editApiKey(settings),
-            ),
-            _SettingsTile(
               icon: Icons.smart_toy_outlined,
               title: 'AI Model',
               value: settings.selectedModel.split('/').last,
@@ -151,7 +145,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             ),
             const SizedBox(height: 24),
             const SectionLabel('Data'),
-            const SizedBox(height: 12),
+            const SizedBox(height: DreamSpacing.labelGap),
             _SettingsTile(
               icon: Icons.upload_file_outlined,
               title: 'Export Data',
@@ -173,7 +167,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             ),
             const SizedBox(height: 24),
             const SectionLabel('About'),
-            const SizedBox(height: 12),
+            const SizedBox(height: DreamSpacing.labelGap),
             _SettingsTile(
               icon: Icons.info_outline,
               title: 'About DreamLog',
@@ -182,7 +176,7 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
             ),
             const _SettingsTile(
               icon: Icons.favorite_border,
-              title: 'Built with TokenRouter AI',
+              title: 'Built with LimitRouter AI',
               value: 'Gimora Digital',
             ),
           ],
@@ -219,30 +213,6 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Profile name updated.')),
-        );
-      }
-    }
-  }
-
-  Future<void> _editApiKey(AppSettings settings) async {
-    final apiKey = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => _ApiKeySheet(
-        initialValue: settings.tokenRouterApiKey,
-      ),
-    );
-
-    if (apiKey != null) {
-      await ref.read(appSettingsProvider.notifier).updateApiKey(apiKey);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                apiKey.trim().isEmpty ? 'API key cleared.' : 'API key saved.'),
-          ),
         );
       }
     }
@@ -310,15 +280,32 @@ class _ProfileSettingsScreenState extends ConsumerState<ProfileSettingsScreen> {
     final value =
         '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
     await ref.read(appSettingsProvider.notifier).updateReminderTime(value);
+
+    if (settings.reminderEnabled) {
+      await _scheduleMorning(picked);
+    }
   }
 
   Future<void> _toggleReminder(bool enabled) async {
     await ref.read(appSettingsProvider.notifier).updateReminderEnabled(enabled);
-    if (enabled) {
-      final notification = ref.read(notificationServiceProvider);
-      await notification.initialize();
-      await notification.showMorningReminderPreview();
+    final notification = ref.read(notificationServiceProvider);
+    if (!enabled) {
+      await notification.cancelMorning();
+      return;
     }
+    await _scheduleMorning(
+      _parseTime(
+        ref.read(appSettingsProvider).valueOrNull?.reminderTime ??
+            AppSettings.defaults().reminderTime,
+      ),
+    );
+    await notification.showMorningReminderPreview();
+  }
+
+  Future<void> _scheduleMorning(TimeOfDay time) async {
+    final notification = ref.read(notificationServiceProvider);
+    await notification.initialize();
+    await notification.scheduleMorning(time);
   }
 
   Future<void> _exportAllDreams() async {
@@ -682,9 +669,9 @@ class _OptionSheet extends StatelessWidget {
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: maxHeight),
           child: DecoratedBox(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: DreamColors.surfaceTwo,
-              borderRadius: BorderRadius.vertical(
+              borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(DreamRadii.xl),
               ),
             ),
@@ -754,131 +741,6 @@ class _OptionSheet extends StatelessWidget {
   }
 }
 
-class _ApiKeySheet extends StatefulWidget {
-  const _ApiKeySheet({required this.initialValue});
-
-  final String initialValue;
-
-  @override
-  State<_ApiKeySheet> createState() => _ApiKeySheetState();
-}
-
-class _ApiKeySheetState extends State<_ApiKeySheet> {
-  late final TextEditingController _controller;
-  var _obscure = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialValue);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: SafeArea(
-        top: false,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.82,
-          ),
-          child: DecoratedBox(
-            decoration: const BoxDecoration(
-              color: DreamColors.surfaceTwo,
-              borderRadius: BorderRadius.vertical(
-                top: Radius.circular(DreamRadii.xl),
-              ),
-            ),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(22, 18, 22, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 42,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: DreamColors.borderMuted,
-                        borderRadius: BorderRadius.circular(DreamRadii.pill),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  Text(
-                    'TokenRouter API Key',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Disimpan lokal di HP ini, tidak ditulis ke source code.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 18),
-                  TextField(
-                    controller: _controller,
-                    autofocus: true,
-                    obscureText: _obscure,
-                    autocorrect: false,
-                    enableSuggestions: false,
-                    keyboardType: TextInputType.visiblePassword,
-                    textInputAction: TextInputAction.done,
-                    decoration: InputDecoration(
-                      labelText: 'API key',
-                      hintText: 'sk-...',
-                      prefixIcon: const Icon(Icons.key_outlined),
-                      suffixIcon: IconButton(
-                        onPressed: () => setState(() => _obscure = !_obscure),
-                        icon: Icon(
-                          _obscure
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
-                      ),
-                    ),
-                    onSubmitted: (value) => Navigator.of(context).pop(value),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(''),
-                        child: const Text('Clear'),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Cancel'),
-                      ),
-                      const SizedBox(width: 8),
-                      FilledButton(
-                        onPressed: () =>
-                            Navigator.of(context).pop(_controller.text),
-                        child: const Text('Save'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _NameSheet extends StatefulWidget {
   const _NameSheet({required this.initialValue});
 
@@ -913,9 +775,9 @@ class _NameSheetState extends State<_NameSheet> {
       child: SafeArea(
         top: false,
         child: DecoratedBox(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: DreamColors.surfaceTwo,
-            borderRadius: BorderRadius.vertical(
+            borderRadius: const BorderRadius.vertical(
               top: Radius.circular(DreamRadii.xl),
             ),
           ),

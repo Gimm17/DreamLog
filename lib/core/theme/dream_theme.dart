@@ -4,7 +4,39 @@ import 'package:google_fonts/google_fonts.dart';
 import '../constants/app_tokens.dart';
 
 abstract final class DreamTheme {
-  static ThemeData dark() {
+  static ThemeData dark() => _build();
+
+  static ThemeData cosmic() => _build(
+        scheme: const ColorScheme.dark(
+          primary: DreamColors.primaryLight,
+          secondary: Color(0xFF67E8F9),
+          surface: Color(0xFF2E1065),
+          error: DreamColors.rose,
+          onPrimary: DreamColors.textPrimary,
+          onSecondary: DreamColors.onAccent,
+          onSurface: DreamColors.textPrimary,
+        ),
+      );
+
+  static ThemeData amoled() => _build(
+        scheme: const ColorScheme.dark(
+          primary: DreamColors.primaryLight,
+          secondary: DreamColors.aurora,
+          surface: Color(0xFF0D0D0D),
+          error: DreamColors.rose,
+          onPrimary: DreamColors.textPrimary,
+          onSecondary: DreamColors.onAccent,
+          onSurface: DreamColors.textPrimary,
+        ),
+        cardColor: const Color(0xFF0D0D0D),
+        inputFill: const Color(0xFF131313),
+      );
+
+  static ThemeData _build({
+    ColorScheme? scheme,
+    Color? cardColor,
+    Color? inputFill,
+  }) {
     final body = GoogleFonts.plusJakartaSansTextTheme();
     final display = GoogleFonts.playfairDisplayTextTheme();
 
@@ -12,15 +44,16 @@ abstract final class DreamTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: DreamColors.background,
-      colorScheme: const ColorScheme.dark(
-        primary: DreamColors.primaryLight,
-        secondary: DreamColors.aurora,
-        surface: DreamColors.surface,
-        error: DreamColors.rose,
-        onPrimary: DreamColors.textPrimary,
-        onSecondary: DreamColors.background,
-        onSurface: DreamColors.textPrimary,
-      ),
+      colorScheme: scheme ??
+          ColorScheme.dark(
+            primary: DreamColors.primaryLight,
+            secondary: DreamColors.aurora,
+            surface: DreamColors.surface,
+            error: DreamColors.rose,
+            onPrimary: DreamColors.textPrimary,
+            onSecondary: DreamColors.onAccent,
+            onSurface: DreamColors.textPrimary,
+          ),
       textTheme: body.copyWith(
         displayLarge: display.displayLarge?.copyWith(
           color: DreamColors.textPrimary,
@@ -79,7 +112,7 @@ abstract final class DreamTheme {
         centerTitle: true,
       ),
       cardTheme: CardThemeData(
-        color: DreamColors.surface,
+        color: cardColor ?? DreamColors.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DreamRadii.lg),
@@ -87,7 +120,7 @@ abstract final class DreamTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: DreamColors.surfaceTwo,
+        fillColor: inputFill ?? DreamColors.surfaceTwo,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(DreamRadii.md),
           borderSide: BorderSide.none,

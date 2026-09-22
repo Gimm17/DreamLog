@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/constants/app_tokens.dart';
+import '../../data/models/app_settings.dart';
 import '../../data/models/dream_interpretation.dart';
+import '../../data/services/speech_service.dart';
 import '../../shared/providers/app_providers.dart';
 import '../../shared/widgets/gradient_button.dart';
 
@@ -23,7 +25,10 @@ class DreamDraft {
 }
 
 class NewDreamEntryScreen extends ConsumerStatefulWidget {
-  const NewDreamEntryScreen({super.key});
+  const NewDreamEntryScreen({super.key, this.editingId});
+
+  /// When set, the screen edits this saved dream instead of creating one.
+  final String? editingId;
 
   @override
   ConsumerState<NewDreamEntryScreen> createState() =>
@@ -38,6 +43,41 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
   var _isRecording = false;
   var _isSubmitting = false;
 
+  /// Defaults to the app language, but stays independently switchable.
+  var _recordingLanguage = AppSettings.defaults().language;
+  var _didInitRecordingLanguage = false;
+
+  /// Text already in the field when recording starts. The recognizer reports
+  /// the whole session, so this prefix stops partial results from wiping what
+  /// the user typed before tapping the mic.
+  var _textBeforeRecording = '';
+
+  bool get _isEditing => widget.editingId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final id = widget.editingId;
+    if (id == null) {
+      return;
+    }
+    // Post-frame: the journal controller may still be loading on cold start.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final entry = ref.read(dreamByIdProvider(id));
+      if (entry == null) {
+        return;
+      }
+      setState(() {
+        _controller.text = entry.content;
+        _selectedDate = entry.createdAt;
+        _clarity = entry.clarity;
+      });
+    });
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -50,6 +90,15 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
     final textTheme = Theme.of(context).textTheme;
     final hasContent = _controller.text.trim().isNotEmpty;
 
+    if (!_didInitRecordingLanguage) {
+      final appLanguage =
+          ref.watch(appSettingsProvider).valueOrNull?.language;
+      if (appLanguage != null && speechLocaleIds.containsKey(appLanguage)) {
+        _recordingLanguage = appLanguage;
+        _didInitRecordingLanguage = true;
+      }
+    }
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       appBar: AppBar(
@@ -58,7 +107,7 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
           icon: const Icon(Icons.close, size: 32),
         ),
         title: Text(
-          'New Dream',
+          _isEditing ? 'Edit Dream' : 'New Dream',
           style: textTheme.titleMedium?.copyWith(fontSize: 18),
         ),
         actions: [
@@ -79,7 +128,12 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
       body: Stack(
         children: [
           ListView(
-            padding: const EdgeInsets.fromLTRB(28, 24, 28, 140),
+            padding: const EdgeInsets.fromLTRB(
+              DreamLayout.screenPadding,
+              DreamLayout.screenTop,
+              DreamLayout.screenPadding,
+              DreamLayout.dockedBarBottom,
+            ),
             children: [
               Row(
                 children: [
@@ -107,7 +161,7 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
                 duration: const Duration(milliseconds: 180),
                 decoration: BoxDecoration(
                   color: DreamColors.surfaceTwo,
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(DreamRadii.xl),
                   border: Border.all(
                     color: _focusNode.hasFocus
                         ? DreamColors.primaryLight
@@ -119,7 +173,9 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
                 child: TextField(
                   controller: _controller,
                   focusNode: _focusNode,
-                  minLines: 9,
+                  // 7 rather than 9: the recording block below needs to clear
+                  // the docked action bar on a short screen.
+                  minLines: 7,
                   maxLines: 14,
                   onChanged: (_) => setState(() {}),
                   style: textTheme.headlineMedium?.copyWith(
@@ -138,10 +194,10 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 52),
+              const SizedBox(height: 34),
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                       child: Divider(color: DreamColors.borderMuted)),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -153,14 +209,41 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
                       ),
                     ),
                   ),
-                  const Expanded(
+                  Expanded(
                       child: Divider(color: DreamColors.borderMuted)),
                 ],
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 20),
               Center(
                 child: Column(
                   children: [
+                    // Above the mic, not below it: the docked action bar
+                    // overlays the bottom of this scroll view and would cover
+                    // anything placed under the button.
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        for (final language in speechLocaleIds.keys)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 5),
+                            child: ChoiceChip(
+                              label: Text(language),
+                              selected: _recordingLanguage == language,
+                              onSelected: _isRecording
+                                  ? null
+                                  : (_) => setState(
+                                        () => _recordingLanguage = language,
+                                      ),
+                              backgroundColor: Colors.transparent,
+                              selectedColor: DreamColors.primaryLight,
+                              side: BorderSide(
+                                  color: DreamColors.borderMuted),
+                              showCheckmark: false,
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
                     GestureDetector(
                       onTap: _toggleRecording,
                       child: AnimatedContainer(
@@ -187,8 +270,8 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
                     const SizedBox(height: 14),
                     Text(
                       _isRecording
-                          ? 'Recording... tap to stop'
-                          : 'Tap to speak',
+                          ? 'Recording in $_recordingLanguage... tap to stop'
+                          : 'Tap to speak in $_recordingLanguage',
                       style: textTheme.bodyMedium?.copyWith(fontSize: 15),
                     ),
                   ],
@@ -235,8 +318,8 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
             ],
           ),
           Positioned(
-            left: 28,
-            right: 28,
+            left: DreamLayout.screenPadding,
+            right: DreamLayout.screenPadding,
             bottom: 24,
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -262,9 +345,12 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
                   ),
                   const SizedBox(height: 14),
                   GradientButton(
-                    label:
-                        _isSubmitting ? 'Interpreting...' : 'Interpret with AI',
-                    icon: Icons.auto_awesome,
+                    label: switch ((_isEditing, _isSubmitting)) {
+                      (true, _) => 'Save Changes',
+                      (false, true) => 'Interpreting...',
+                      (false, false) => 'Interpret with AI',
+                    },
+                    icon: _isEditing ? Icons.check : Icons.auto_awesome,
                     onPressed: hasContent && !_isSubmitting ? _submit : null,
                   ),
                 ],
@@ -284,21 +370,38 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
       return;
     }
 
-    final ready = await speech.initialize();
+    final ready = await speech.initialize(
+      appLanguage: _recordingLanguage,
+    );
     if (!ready) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Voice input permission is not available.')),
+            content: Text(
+              'Voice input is unavailable. Check the microphone permission.',
+            ),
+          ),
         );
       }
       return;
     }
 
+    _textBeforeRecording = _controller.text;
     setState(() => _isRecording = true);
     await speech.listen(
       onText: (text) {
-        _controller.text = text;
+        if (!mounted) {
+          return;
+        }
+        // Append rather than replace: the recognizer reports only its own
+        // session, so assigning directly would delete earlier writing.
+        final prefix = _textBeforeRecording;
+        final separator =
+            prefix.isEmpty || prefix.endsWith(' ') || text.isEmpty ? '' : ' ';
+        _controller.text = '$prefix$separator$text';
+        _controller.selection = TextSelection.collapsed(
+          offset: _controller.text.length,
+        );
         setState(() {});
       },
       onDone: () {
@@ -306,14 +409,37 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
           setState(() => _isRecording = false);
         }
       },
+      onError: (error) {
+        if (!mounted) {
+          return;
+        }
+        setState(() => _isRecording = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Voice input stopped: $error')),
+        );
+      },
     );
   }
 
   Future<void> _submit() async {
+    final content = _controller.text.trim();
+    final editingId = widget.editingId;
+    if (editingId != null) {
+      await ref.read(dreamJournalProvider.notifier).updateEntry(
+            id: editingId,
+            content: content,
+            date: _selectedDate,
+            clarity: _clarity,
+          );
+      if (mounted) {
+        context.pop();
+      }
+      return;
+    }
+
     setState(() => _isSubmitting = true);
     final service = ref.read(aiServiceProvider);
-    final interpretation =
-        await service.interpretDream(_controller.text.trim());
+    final interpretation = await service.interpretDream(content);
     if (!mounted) {
       return;
     }
@@ -321,7 +447,7 @@ class _NewDreamEntryScreenState extends ConsumerState<NewDreamEntryScreen> {
     context.push(
       '/ai-result',
       extra: DreamDraft(
-        content: _controller.text.trim(),
+        content: content,
         date: _selectedDate,
         clarity: _clarity,
         interpretation: interpretation,

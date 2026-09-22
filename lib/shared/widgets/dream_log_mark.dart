@@ -16,17 +16,27 @@ class DreamLogMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The painter reads DreamColors statically, which is invisible to Flutter's
+    // dependency system, so the palette is threaded in as a repaint key.
+    Theme.of(context);
     return CustomPaint(
       size: Size.square(size),
-      painter: _DreamLogMarkPainter(background: background),
+      painter: _DreamLogMarkPainter(
+        background: background,
+        palette: DreamColors.palette,
+      ),
     );
   }
 }
 
 class _DreamLogMarkPainter extends CustomPainter {
-  const _DreamLogMarkPainter({required this.background});
+  const _DreamLogMarkPainter({
+    required this.background,
+    required this.palette,
+  });
 
   final bool background;
+  final DreamPalette palette;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -38,10 +48,10 @@ class _DreamLogMarkPainter extends CustomPainter {
       canvas.drawRRect(
         RRect.fromRectAndRadius(rect, Radius.circular(radius)),
         Paint()
-          ..shader = const LinearGradient(
+          ..shader = LinearGradient(
             colors: [
-              DreamColors.surface,
-              DreamColors.background,
+              palette.surface,
+              palette.background,
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -129,6 +139,7 @@ class _DreamLogMarkPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _DreamLogMarkPainter oldDelegate) {
-    return oldDelegate.background != background;
+    return oldDelegate.background != background ||
+        oldDelegate.palette != palette;
   }
 }

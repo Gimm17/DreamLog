@@ -39,21 +39,10 @@ final appSettingsProvider =
     ..load(),
 );
 
-final effectiveAiApiKeyProvider = Provider<String>((ref) {
-  const envKey = String.fromEnvironment('TOKENROUTER_API_KEY');
-  final storedKey =
-      ref.watch(appSettingsProvider).valueOrNull?.tokenRouterApiKey.trim() ??
-          '';
-  return storedKey.isNotEmpty ? storedKey : envKey;
-});
-
 final aiServiceProvider = Provider<AiService>((ref) {
   final settings =
       ref.watch(appSettingsProvider).valueOrNull ?? AppSettings.defaults();
-  return AiService(
-    apiKey: ref.watch(effectiveAiApiKeyProvider),
-    model: settings.selectedModel,
-  );
+  return AiService(model: settings.selectedModel);
 });
 
 final speechServiceProvider = Provider<SpeechService>((ref) => SpeechService());
@@ -137,6 +126,35 @@ class DreamJournalController
     );
 
     await _repository.save(entry);
+    await load();
+  }
+
+  /// Rewrites the editable fields of a saved dream. The interpretation is kept
+  /// as-is — re-running the AI on every edit would cost a call and silently
+  /// change text the user already read.
+  Future<void> updateEntry({
+    required String id,
+    required String content,
+    required DateTime date,
+    required double clarity,
+  }) async {
+    final existing = await _repository.byId(id);
+    if (existing == null) {
+      return;
+    }
+    await _repository.save(
+      existing.copyWith(
+        title: _titleFromDream(content, existing.interpretation),
+        content: content,
+        createdAt: date,
+        clarity: clarity,
+      ),
+    );
+    await load();
+  }
+
+  Future<void> deleteEntry(String id) async {
+    await _repository.delete(id);
     await load();
   }
 
@@ -247,11 +265,6 @@ class AppSettingsController extends StateNotifier<AsyncValue<AppSettings>> {
     return settings;
   }
 
-  Future<void> updateApiKey(String apiKey) async {
-    await _save(
-        (settings) => settings.copyWith(tokenRouterApiKey: apiKey.trim()));
-  }
-
   Future<void> updateSelectedModel(String model) async {
     await _save((settings) => settings.copyWith(selectedModel: model));
   }
@@ -273,12 +286,8 @@ class AppSettingsController extends StateNotifier<AsyncValue<AppSettings>> {
   }
 
   Future<void> importSettings(AppSettings settings) async {
-    final current = await ensureLoaded();
-    final updated = settings.copyWith(
-      tokenRouterApiKey: current.tokenRouterApiKey,
-    );
-    await _repository.saveSettings(updated);
-    state = AsyncData(updated);
+    await _repository.saveSettings(settings);
+    state = AsyncData(settings);
   }
 
   Future<void> _save(AppSettings Function(AppSettings settings) update) async {

@@ -128,14 +128,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
           fit: StackFit.expand,
           children: [
             DecoratedBox(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: RadialGradient(
-                  center: Alignment(0.2, -0.25),
+                  center: const Alignment(0.2, -0.25),
                   radius: 1.1,
                   colors: [
-                    Color(0xFF211B4D),
+                    const Color(0xFF211B4D),
                     DreamColors.background,
-                    Color(0xFF08070D),
+                    const Color(0xFF08070D),
                   ],
                 ),
               ),
@@ -153,6 +153,9 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     child: DreamOrbitScene(
                       animation: _motionController,
                       icon: Icons.dark_mode_rounded,
+                      // Safe to const: the splash is the first route, so the
+                      // stored palette is already applied before it mounts and
+                      // it never has to repaint on a theme change.
                       center: const DreamLogMark(
                         size: 112,
                         background: false,

@@ -18,7 +18,12 @@ class SymbolsScreen extends ConsumerWidget {
     return Scaffold(
       body: SafeArea(
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 28, 24, 42),
+          padding: const EdgeInsets.fromLTRB(
+            DreamLayout.screenPadding,
+            DreamLayout.screenTop,
+            DreamLayout.screenPadding,
+            DreamLayout.tabBottom,
+          ),
           children: [
             Text(
               'Symbols',
@@ -38,7 +43,7 @@ class SymbolsScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(28),
                 child: Column(
                   children: [
-                    const Icon(
+                    Icon(
                       Icons.auto_awesome_outlined,
                       color: DreamColors.borderMuted,
                       size: 58,
